@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Pages動作テスト</title>
+<style>
+  body {
+    margin: 0;
+    font-family: -apple-system, sans-serif;
+    background: #0a1128;
+    color: #e0f7ff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+  }
+  h1 { color: #00e5ff; font-size: 1.4rem; margin-bottom: 10px; }
+  .status { margin: 8px 0; padding: 10px; border-radius: 8px; width: 100%; max-width: 320px; }
+  .ok { background: #0d3b3b; border: 1px solid #00e5ff; }
+  .ng { background: #3b0d0d; border: 1px solid #ff4d4d; }
+  .tab-btns { margin-top: 20px; display: flex; gap: 8px; }
+  button {
+    background: #1a2a4a; color: #00e5ff; border: 1px solid #00e5ff;
+    padding: 8px 16px; border-radius: 6px; font-size: 0.9rem;
+  }
+  .tab { display: none; margin-top: 16px; }
+  .tab.visible { display: block; }
+</style>
+</head>
+<body>
+  <h1>GitHub Pages 動作テスト</h1>
+  <div id="fetch-result" class="status">JSON読み込み中...</div>
+
+  <div class="tab-btns">
+    <button onclick="showTab('a')">タブA</button>
+    <button onclick="showTab('b')">タブB</button>
+  </div>
+  <div id="tab-a" class="tab visible">タブAの中身です</div>
+  <div id="tab-b" class="tab">タブBの中身です</div>
+
+  <script>
+    fetch('./data.json')
+      .then(res => {
+        if (!res.ok) throw new Error('status ' + res.status);
+        return res.json();
+      })
+      .then(data => {
+        document.getElementById('fetch-result').textContent =
+          '✅ JSON読み込み成功: ' + JSON.stringify(data);
+        document.getElementById('fetch-result').className = 'status ok';
+      })
+      .catch(err => {
+        document.getElementById('fetch-result').textContent =
+          '❌ JSON読み込み失敗: ' + err.message;
+        document.getElementById('fetch-result').className = 'status ng';
+      });
+
+    function showTab(id) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('visible'));
+      document.getElementById('tab-' + id).classList.add('visible');
+    }
+  </script>
+</body>
+</html>
