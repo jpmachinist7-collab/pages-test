@@ -38,7 +38,12 @@
     font-weight: 700;
     letter-spacing: 0.02em;
     color: var(--cyan);
-    margin: 4px 0 16px;
+    margin: 4px 0 2px;
+  }
+  .today-line {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 14px;
   }
   h2 {
     font-size: 0.95rem;
@@ -53,13 +58,16 @@
     padding: 14px;
     margin-bottom: 14px;
   }
+  .panel.base {
+    border-color: var(--cyan-dim);
+  }
   label {
     display: block;
     font-size: 0.78rem;
     color: var(--muted);
     margin-bottom: 6px;
   }
-  select, input[type=text], input[type=number], input[type=tel] {
+  select, input[type=text], input[type=number], input[type=tel], input[type=date] {
     width: 100%;
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -102,14 +110,6 @@
     background: var(--panel-2);
     color: var(--muted);
     border-color: var(--border);
-  }
-  .btn-ghost {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 8px 12px;
-    border-radius: 7px;
-    font-size: 0.82rem;
   }
   .btn-danger {
     background: transparent;
@@ -261,16 +261,51 @@ const storage = {
     try { localStorage.setItem(key, value); } catch (e) {}
   }
 };
-const DATA_KEY = 'machine-log-data-v1';
+const DATA_KEY = 'machine-log-data-v2';
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function fmtDateJp(dstr) {
+  const d = new Date(dstr + 'T00:00:00');
+  const w = ['日','月','火','水','木','金','土'][d.getDay()];
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${w})`;
+}
 function roundQuarter(x) { return Math.round(x * 4) / 4; }
 function fmtHours(x) { return (Math.round(x * 100) / 100).toString(); }
 
+// ---------- counter reading: raw digits -> "H:MM" display, last 2 digits = minutes ----------
+function digitsToMinutes(digits) {
+  const clean = digits.replace(/\D/g, '');
+  if (clean.length === 0) return null;
+  const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
+  const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
+  return parseInt(hoursPart, 10) * 60 + parseInt(minutesPart, 10);
+}
+function digitsToDisplay(digits) {
+  const clean = digits.replace(/\D/g, '');
+  if (clean.length === 0) return '';
+  const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
+  const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
+  return `${parseInt(hoursPart, 10)}:${minutesPart}`;
+}
+function minutesToDisplay(totalMin) {
+  if (totalMin === null || totalMin === undefined) return '';
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+// ---------- order number formatting: 00-00000-000-00-000 (2-5-3-2-3 digits) ----------
+function formatOrderNumber(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 15);
+  const parts = [digits.slice(0,2), digits.slice(2,7), digits.slice(7,10), digits.slice(10,12), digits.slice(12,15)];
+  return parts.filter(p => p.length > 0).join('-');
+}
+function orderNumberDigitCount(v) { return (v || '').replace(/-/g, '').length; }
+
 function defaultData() {
   return {
-    machines: [{ id: uid(), name: 'マシニング1号機', lastReading: null, lastDate: null }],
+    machines: [{ id: uid(), name: 'マシニング1号機', lastReadingMinutes: null, lastReadingDigits: '', lastDate: null }],
     stopReasons: ['段取り替え', '工具交換', 'チョコ停', '材料待ち', '計画停止', 'その他'],
     logs: []
   };
@@ -280,7 +315,7 @@ let state = {
   data: null,
   activeTab: 'record',
   selectedMachineId: null,
-  entry: { reading: '', items: [] }, // items: {id, type:'order'|'stop', orderNumber, reason, hours}
+  entry: { digits: '', date: todayStr(), items: [] },
   historyFilterMachine: 'all'
 };
 
@@ -306,18 +341,12 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 1600);
 }
 
-// ---------- order number formatting: 00-00000-00-00 (2-5-2-2 digits) ----------
-function formatOrderNumber(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 11);
-  const parts = [digits.slice(0, 2), digits.slice(2, 7), digits.slice(7, 9), digits.slice(9, 11)];
-  return parts.filter(p => p.length > 0).join('-');
-}
-
 // ---------- render ----------
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
     <h1>稼働ログ</h1>
+    <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.activeTab === 'record' ? renderRecordTab() : ''}
     ${state.activeTab === 'history' ? renderHistoryTab() : ''}
     ${state.activeTab === 'master' ? renderMasterTab() : ''}
@@ -344,15 +373,15 @@ function renderRecordTab() {
     return `<div class="panel empty">機械が登録されていません。<br>「マスタ管理」タブから追加してください。</div>`;
   }
   const machine = getMachine(state.selectedMachineId) || machines[0];
-  const reading = parseFloat(state.entry.reading);
-  const hasPrev = machine.lastReading !== null && machine.lastReading !== undefined;
-  const rawElapsed = (hasPrev && !isNaN(reading)) ? (reading - machine.lastReading) : null;
-  const elapsed = rawElapsed !== null ? roundQuarter(Math.max(0, rawElapsed)) : null;
+  const hasPrev = machine.lastReadingMinutes !== null && machine.lastReadingMinutes !== undefined;
+  const currentMinutes = digitsToMinutes(state.entry.digits);
+  const rawElapsedMin = (hasPrev && currentMinutes !== null) ? (currentMinutes - machine.lastReadingMinutes) : null;
+  const elapsed = rawElapsedMin !== null ? roundQuarter(Math.max(0, rawElapsedMin) / 60) : null;
 
   const allocated = state.entry.items.reduce((s, it) => s + (parseFloat(it.hours) || 0), 0);
   const remaining = elapsed !== null ? roundQuarter(elapsed - allocated) : null;
   const canSave = elapsed !== null && Math.abs(remaining) < 0.001 && state.entry.items.length > 0
-    && state.entry.items.every(it => it.type === 'stop' || formatOrderNumber(it.orderNumber || '').replace(/-/g,'').length === 11);
+    && state.entry.items.every(it => it.type === 'stop' || orderNumberDigitCount(it.orderNumber) === 15);
 
   return `
     <div class="panel">
@@ -360,24 +389,27 @@ function renderRecordTab() {
       <select id="machine-select">
         ${machines.map(m => `<option value="${m.id}" ${m.id === machine.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
       </select>
-      <div class="stat"><span>前回入力</span><b>${hasPrev ? escapeHtml(machine.lastDate) + '　' + fmtHours(machine.lastReading) + ' h' : '記録なし（初回）'}</b></div>
+      <div class="stat"><span>現在の基準（開始）</span><b>${hasPrev ? escapeHtml(fmtDateJp(machine.lastDate)) + '　' + minutesToDisplay(machine.lastReadingMinutes) : '記録なし（初回）'}</b></div>
     </div>
 
-    <div class="panel">
-      <label>本日の積算稼働時間（メーター値）</label>
-      <input type="number" inputmode="decimal" id="reading-input" placeholder="例：1234.5" value="${state.entry.reading}">
-      ${!hasPrev ? `<div class="balance-text" style="margin-top:8px;">初回はこの値が基準として保存されます（明細入力は不要）</div>` : ''}
+    <div class="panel ${!hasPrev ? 'base' : ''}">
+      <label>${hasPrev ? '終了時のカウンター値' : '基準となるカウンター値'}（機械の表示のまま入力）</label>
+      <input type="tel" inputmode="numeric" id="reading-input" placeholder="例：123456:12 と表示なら「12345612」と入力" value="${digitsToDisplay(state.entry.digits)}">
+      <div class="field" style="margin-top:10px; margin-bottom:0;">
+        <label>この記録の日付（自動で日付は変わりません。必要なら変更してください）</label>
+        <input type="date" id="entry-date" value="${state.entry.date}">
+      </div>
       ${hasPrev && elapsed !== null ? `
         <div class="elapsed-display">
           <div class="num">${fmtHours(elapsed)} h</div>
-          <div class="label">経過時間（0.25h単位に丸め）</div>
+          <div class="label">経過時間（0.25h単位に丸め／カウンター値自体は丸めません）</div>
         </div>
       ` : ''}
     </div>
 
     ${hasPrev && elapsed !== null && elapsed > 0 ? `
       <div class="panel">
-        <div class="item-head"><h2 style="margin:0;">内訳</h2></div>
+        <div class="item-head"><h2 style="margin:0;">内訳（受注番号・停止理由に配分）</h2></div>
         ${state.entry.items.map((it, idx) => renderItemCard(it, idx)).join('') || '<div class="empty" style="padding:12px;">受注番号または停止理由を追加してください</div>'}
         <div class="add-row">
           <button class="btn" data-action="add-order">＋ 受注番号を追加</button>
@@ -390,8 +422,8 @@ function renderRecordTab() {
       </div>
     ` : ''}
 
-    <button class="btn-primary" id="save-btn" ${(!hasPrev ? isNaN(reading) : !canSave) ? 'disabled' : ''}>
-      ${hasPrev ? '本日の記録を保存' : '基準値として保存'}
+    <button class="btn-primary" id="save-btn" ${(!hasPrev ? currentMinutes === null : !canSave) ? 'disabled' : ''}>
+      ${hasPrev ? 'この記録を保存' : '基準として保存'}
     </button>
   `;
 }
@@ -405,7 +437,7 @@ function renderItemCard(it, idx) {
           <button class="btn-danger" data-action="remove-item" data-idx="${idx}">削除</button>
         </div>
         <div class="row" style="margin-bottom:8px;">
-          <input type="tel" inputmode="numeric" placeholder="00-00000-00-00" value="${it.orderNumber || ''}" data-action="order-number" data-idx="${idx}">
+          <input type="tel" inputmode="numeric" placeholder="00-00000-000-00-000" value="${it.orderNumber || ''}" data-action="order-number" data-idx="${idx}">
         </div>
         <div class="row">
           <label style="flex:0 0 auto; margin:0; align-self:center; color:var(--muted); font-size:0.8rem;">時間(h)</label>
@@ -461,10 +493,10 @@ function renderLogEntry(l) {
   return `
     <div class="log-entry">
       <div class="log-entry-head">
-        <span class="date">${escapeHtml(l.date)}</span>
+        <span class="date">${escapeHtml(fmtDateJp(l.date))}</span>
         <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
       </div>
-      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h</span><span>${fmtHours(l.startReading)} → ${fmtHours(l.endReading)}</span></div>
+      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
       <div class="log-entry-sub" style="margin-top:4px;">${escapeHtml(details) || '（基準値記録）'}</div>
     </div>
   `;
@@ -525,16 +557,23 @@ function attachHandlers() {
   const machineSelect = document.getElementById('machine-select');
   if (machineSelect) machineSelect.onchange = (e) => {
     state.selectedMachineId = e.target.value;
-    state.entry = { reading: '', items: [] };
+    state.entry = { digits: '', date: todayStr(), items: [] };
     render();
   };
 
   const readingInput = document.getElementById('reading-input');
   if (readingInput) {
-    readingInput.oninput = (e) => { state.entry.reading = e.target.value; render(); };
+    readingInput.oninput = (e) => {
+      state.entry.digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+      render();
+    };
     readingInput.focus();
-    readingInput.setSelectionRange(readingInput.value.length, readingInput.value.length);
+    const v = readingInput.value;
+    readingInput.setSelectionRange(v.length, v.length);
   }
+
+  const dateInput = document.getElementById('entry-date');
+  if (dateInput) dateInput.onchange = (e) => { state.entry.date = e.target.value; };
 
   const addOrderBtn = document.querySelector('[data-action="add-order"]');
   if (addOrderBtn) addOrderBtn.onclick = () => {
@@ -581,7 +620,7 @@ function attachHandlers() {
     const inp = document.getElementById('new-machine-name');
     const name = inp.value.trim();
     if (!name) return;
-    state.data.machines.push({ id: uid(), name, lastReading: null, lastDate: null });
+    state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null });
     await saveData();
     render();
   };
@@ -650,27 +689,28 @@ function attachHandlers() {
 
 async function handleSave() {
   const machine = getMachine(state.selectedMachineId);
-  const reading = parseFloat(state.entry.reading);
-  if (isNaN(reading)) return;
-  const hasPrev = machine.lastReading !== null && machine.lastReading !== undefined;
+  const currentMinutes = digitsToMinutes(state.entry.digits);
+  if (currentMinutes === null) return;
+  const hasPrev = machine.lastReadingMinutes !== null && machine.lastReadingMinutes !== undefined;
 
   if (!hasPrev) {
-    machine.lastReading = reading;
-    machine.lastDate = todayStr();
+    machine.lastReadingMinutes = currentMinutes;
+    machine.lastReadingDigits = state.entry.digits;
+    machine.lastDate = state.entry.date;
     await saveData();
-    state.entry = { reading: '', items: [] };
-    showToast('基準値を保存しました');
+    state.entry = { digits: '', date: todayStr(), items: [] };
+    showToast('基準として保存しました');
     render();
     return;
   }
 
-  const elapsed = roundQuarter(Math.max(0, reading - machine.lastReading));
+  const elapsed = roundQuarter(Math.max(0, currentMinutes - machine.lastReadingMinutes) / 60);
   const log = {
     id: uid(),
-    date: todayStr(),
+    date: state.entry.date,
     machineId: machine.id,
-    startReading: machine.lastReading,
-    endReading: reading,
+    startMinutes: machine.lastReadingMinutes,
+    endMinutes: currentMinutes,
     elapsedHours: elapsed,
     entries: state.entry.items.map(it => it.type === 'order'
       ? { type: 'order', orderNumber: it.orderNumber, hours: parseFloat(it.hours) }
@@ -678,10 +718,11 @@ async function handleSave() {
     savedAt: Date.now()
   };
   state.data.logs.push(log);
-  machine.lastReading = reading;
-  machine.lastDate = todayStr();
+  machine.lastReadingMinutes = currentMinutes;
+  machine.lastReadingDigits = state.entry.digits;
+  machine.lastDate = state.entry.date;
   await saveData();
-  state.entry = { reading: '', items: [] };
+  state.entry = { digits: '', date: todayStr(), items: [] };
   showToast('記録を保存しました');
   render();
 }
@@ -694,14 +735,14 @@ function exportCsv() {
     .forEach(l => {
       const machine = getMachine(l.machineId);
       if (l.entries.length === 0) {
-        rows.push([l.date, machine?.name || '', '', '', '', l.startReading, l.endReading, l.elapsedHours]);
+        rows.push([l.date, machine?.name || '', '', '', '', minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes), l.elapsedHours]);
       } else {
         l.entries.forEach(e => {
           rows.push([
             l.date, machine?.name || '',
             e.type === 'order' ? '受注番号' : '停止',
             e.type === 'order' ? e.orderNumber : e.reason,
-            e.hours, l.startReading, l.endReading, l.elapsedHours
+            e.hours, minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes), l.elapsedHours
           ]);
         });
       }
