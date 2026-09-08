@@ -2,70 +2,680 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>Pages動作テスト</title>
+<title>稼働ログ</title>
 <style>
-  body {
+  :root {
+    --bg: #070d1f;
+    --panel: #10192f;
+    --panel-2: #0c1424;
+    --border: #1c2b4a;
+    --cyan: #00e5ff;
+    --cyan-dim: #0a4a56;
+    --red: #ff6b6b;
+    --red-dim: #4a1a1a;
+    --text: #e6f4f8;
+    --muted: #6f8199;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
     margin: 0;
-    font-family: -apple-system, sans-serif;
-    background: #0a1128;
-    color: #e0f7ff;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    height: 100%;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 16px 96px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--cyan);
+    margin: 4px 0 16px;
+  }
+  h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 10px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  select, input[type=text], input[type=number], input[type=tel] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 1rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: var(--cyan); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .field { margin-bottom: 12px; }
+  button {
+    font-family: inherit;
+    border: none;
+    cursor: pointer;
+  }
+  .btn {
+    background: var(--panel-2);
+    color: var(--cyan);
+    border: 1px solid var(--cyan-dim);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .btn:active { background: var(--cyan-dim); }
+  .btn-primary {
+    background: var(--cyan);
+    color: #04202a;
+    border: 1px solid var(--cyan);
+    width: 100%;
+    padding: 13px;
+    font-size: 1rem;
+    border-radius: 9px;
+    font-weight: 700;
+  }
+  .btn-primary:disabled {
+    background: var(--panel-2);
+    color: var(--muted);
+    border-color: var(--border);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 7px;
+    font-size: 0.82rem;
+  }
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red-dim);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 6px 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .stat b { color: var(--text); font-size: 0.95rem; }
+  .elapsed-display {
+    text-align: center;
+    padding: 10px 0 4px;
+  }
+  .elapsed-display .num {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--cyan);
+    line-height: 1;
+  }
+  .elapsed-display .label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .item-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+  }
+  .item-card.stop { border-color: var(--red-dim); }
+  .item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .tag {
+    font-size: 0.68rem;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: var(--cyan-dim);
+    color: var(--cyan);
+    font-weight: 600;
+  }
+  .tag.stop { background: var(--red-dim); color: var(--red); }
+  .add-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .balance-bar {
+    height: 6px;
+    background: var(--panel-2);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 8px 0 4px;
+  }
+  .balance-fill { height: 100%; background: var(--cyan); transition: width .2s; }
+  .balance-fill.over { background: var(--red); }
+  .balance-text { font-size: 0.78rem; color: var(--muted); text-align: center; }
+  .tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    display: flex;
+    background: rgba(10,17,36,0.94);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid var(--border);
+    padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  }
+  .tab-btn {
+    flex: 1;
+    background: none;
+    color: var(--muted);
+    font-size: 0.72rem;
+    padding: 4px 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
-    height: 100vh;
+    gap: 3px;
+  }
+  .tab-btn.active { color: var(--cyan); }
+  .tab-btn .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor; opacity: 0.9;
+  }
+  .empty {
     text-align: center;
-    padding: 20px;
-    box-sizing: border-box;
+    color: var(--muted);
+    font-size: 0.85rem;
+    padding: 24px 8px;
   }
-  h1 { color: #00e5ff; font-size: 1.4rem; margin-bottom: 10px; }
-  .status { margin: 8px 0; padding: 10px; border-radius: 8px; width: 100%; max-width: 320px; }
-  .ok { background: #0d3b3b; border: 1px solid #00e5ff; }
-  .ng { background: #3b0d0d; border: 1px solid #ff4d4d; }
-  .tab-btns { margin-top: 20px; display: flex; gap: 8px; }
-  button {
-    background: #1a2a4a; color: #00e5ff; border: 1px solid #00e5ff;
-    padding: 8px 16px; border-radius: 6px; font-size: 0.9rem;
+  .log-entry {
+    border-bottom: 1px solid var(--border);
+    padding: 10px 0;
   }
-  .tab { display: none; margin-top: 16px; }
-  .tab.visible { display: block; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry-head {
+    display: flex; justify-content: space-between;
+    font-size: 0.85rem; margin-bottom: 4px;
+  }
+  .log-entry-head .date { color: var(--text); font-weight: 600; }
+  .log-entry-head .machine { color: var(--muted); }
+  .log-entry-sub {
+    font-size: 0.78rem; color: var(--muted);
+    display: flex; justify-content: space-between; margin-top: 2px;
+  }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .master-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .master-item:last-child { border-bottom: none; }
+  .master-item span { flex: 1; font-size: 0.9rem; }
+  .toast {
+    position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%);
+    background: var(--cyan); color: #04202a; font-weight: 700;
+    padding: 9px 18px; border-radius: 20px; font-size: 0.85rem;
+    opacity: 0; pointer-events: none; transition: opacity .25s;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
 </style>
 </head>
 <body>
-  <h1>GitHub Pages 動作テスト</h1>
-  <div id="fetch-result" class="status">JSON読み込み中...</div>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
 
-  <div class="tab-btns">
-    <button onclick="showTab('a')">タブA</button>
-    <button onclick="showTab('b')">タブB</button>
-  </div>
-  <div id="tab-a" class="tab visible">タブAの中身です</div>
-  <div id="tab-b" class="tab">タブBの中身です</div>
-
-  <script>
-    fetch('./data.json')
-      .then(res => {
-        if (!res.ok) throw new Error('status ' + res.status);
-        return res.json();
-      })
-      .then(data => {
-        document.getElementById('fetch-result').textContent =
-          '✅ JSON読み込み成功: ' + JSON.stringify(data);
-        document.getElementById('fetch-result').className = 'status ok';
-      })
-      .catch(err => {
-        document.getElementById('fetch-result').textContent =
-          '❌ JSON読み込み失敗: ' + err.message;
-        document.getElementById('fetch-result').className = 'status ng';
-      });
-
-    function showTab(id) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('visible'));
-      document.getElementById('tab-' + id).classList.add('visible');
+<script>
+// ---------- storage abstraction (works in Claude artifact preview & real deployment) ----------
+const storage = {
+  async get(key) {
+    if (window.storage) {
+      try { const r = await window.storage.get(key); return r ? r.value : null; }
+      catch (e) { return null; }
     }
-  </script>
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  },
+  async set(key, value) {
+    if (window.storage) {
+      try { await window.storage.set(key, value); return; } catch (e) {}
+    }
+    try { localStorage.setItem(key, value); } catch (e) {}
+  }
+};
+const DATA_KEY = 'machine-log-data-v1';
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function roundQuarter(x) { return Math.round(x * 4) / 4; }
+function fmtHours(x) { return (Math.round(x * 100) / 100).toString(); }
+
+function defaultData() {
+  return {
+    machines: [{ id: uid(), name: 'マシニング1号機', lastReading: null, lastDate: null }],
+    stopReasons: ['段取り替え', '工具交換', 'チョコ停', '材料待ち', '計画停止', 'その他'],
+    logs: []
+  };
+}
+
+let state = {
+  data: null,
+  activeTab: 'record',
+  selectedMachineId: null,
+  entry: { reading: '', items: [] }, // items: {id, type:'order'|'stop', orderNumber, reason, hours}
+  historyFilterMachine: 'all'
+};
+
+async function loadData() {
+  const raw = await storage.get(DATA_KEY);
+  if (raw) {
+    try { state.data = JSON.parse(raw); } catch (e) { state.data = defaultData(); }
+  } else {
+    state.data = defaultData();
+  }
+  if (!state.selectedMachineId && state.data.machines.length) {
+    state.selectedMachineId = state.data.machines[0].id;
+  }
+}
+async function saveData() {
+  await storage.set(DATA_KEY, JSON.stringify(state.data));
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+// ---------- order number formatting: 00-00000-00-00 (2-5-2-2 digits) ----------
+function formatOrderNumber(raw) {
+  const digits = raw.replace(/\D/g, '').slice(0, 11);
+  const parts = [digits.slice(0, 2), digits.slice(2, 7), digits.slice(7, 9), digits.slice(9, 11)];
+  return parts.filter(p => p.length > 0).join('-');
+}
+
+// ---------- render ----------
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>稼働ログ</h1>
+    ${state.activeTab === 'record' ? renderRecordTab() : ''}
+    ${state.activeTab === 'history' ? renderHistoryTab() : ''}
+    ${state.activeTab === 'master' ? renderMasterTab() : ''}
+    <div class="tabbar">
+      ${tabBtn('record', '記録')}
+      ${tabBtn('history', '履歴')}
+      ${tabBtn('master', 'マスタ管理')}
+    </div>
+  `;
+  attachHandlers();
+}
+
+function tabBtn(id, label) {
+  return `<button class="tab-btn ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">
+    <span class="dot"></span>${label}
+  </button>`;
+}
+
+function getMachine(id) { return state.data.machines.find(m => m.id === id); }
+
+function renderRecordTab() {
+  const machines = state.data.machines;
+  if (!machines.length) {
+    return `<div class="panel empty">機械が登録されていません。<br>「マスタ管理」タブから追加してください。</div>`;
+  }
+  const machine = getMachine(state.selectedMachineId) || machines[0];
+  const reading = parseFloat(state.entry.reading);
+  const hasPrev = machine.lastReading !== null && machine.lastReading !== undefined;
+  const rawElapsed = (hasPrev && !isNaN(reading)) ? (reading - machine.lastReading) : null;
+  const elapsed = rawElapsed !== null ? roundQuarter(Math.max(0, rawElapsed)) : null;
+
+  const allocated = state.entry.items.reduce((s, it) => s + (parseFloat(it.hours) || 0), 0);
+  const remaining = elapsed !== null ? roundQuarter(elapsed - allocated) : null;
+  const canSave = elapsed !== null && Math.abs(remaining) < 0.001 && state.entry.items.length > 0
+    && state.entry.items.every(it => it.type === 'stop' || formatOrderNumber(it.orderNumber || '').replace(/-/g,'').length === 11);
+
+  return `
+    <div class="panel">
+      <label>機械</label>
+      <select id="machine-select">
+        ${machines.map(m => `<option value="${m.id}" ${m.id === machine.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <div class="stat"><span>前回入力</span><b>${hasPrev ? escapeHtml(machine.lastDate) + '　' + fmtHours(machine.lastReading) + ' h' : '記録なし（初回）'}</b></div>
+    </div>
+
+    <div class="panel">
+      <label>本日の積算稼働時間（メーター値）</label>
+      <input type="number" inputmode="decimal" id="reading-input" placeholder="例：1234.5" value="${state.entry.reading}">
+      ${!hasPrev ? `<div class="balance-text" style="margin-top:8px;">初回はこの値が基準として保存されます（明細入力は不要）</div>` : ''}
+      ${hasPrev && elapsed !== null ? `
+        <div class="elapsed-display">
+          <div class="num">${fmtHours(elapsed)} h</div>
+          <div class="label">経過時間（0.25h単位に丸め）</div>
+        </div>
+      ` : ''}
+    </div>
+
+    ${hasPrev && elapsed !== null && elapsed > 0 ? `
+      <div class="panel">
+        <div class="item-head"><h2 style="margin:0;">内訳</h2></div>
+        ${state.entry.items.map((it, idx) => renderItemCard(it, idx)).join('') || '<div class="empty" style="padding:12px;">受注番号または停止理由を追加してください</div>'}
+        <div class="add-row">
+          <button class="btn" data-action="add-order">＋ 受注番号を追加</button>
+          <button class="btn" data-action="add-stop">＋ 停止理由を追加</button>
+        </div>
+        <div class="balance-bar"><div class="balance-fill ${remaining < 0 ? 'over' : ''}" style="width:${Math.min(100, Math.max(0, (allocated/Math.max(elapsed,0.01))*100))}%"></div></div>
+        <div class="balance-text">
+          ${remaining === 0 ? '配分完了 ✓' : remaining > 0 ? `残り ${fmtHours(remaining)} h 未割り当て` : `${fmtHours(Math.abs(remaining))} h 超過しています`}
+        </div>
+      </div>
+    ` : ''}
+
+    <button class="btn-primary" id="save-btn" ${(!hasPrev ? isNaN(reading) : !canSave) ? 'disabled' : ''}>
+      ${hasPrev ? '本日の記録を保存' : '基準値として保存'}
+    </button>
+  `;
+}
+
+function renderItemCard(it, idx) {
+  if (it.type === 'order') {
+    return `
+      <div class="item-card">
+        <div class="item-head">
+          <span class="tag">受注番号</span>
+          <button class="btn-danger" data-action="remove-item" data-idx="${idx}">削除</button>
+        </div>
+        <div class="row" style="margin-bottom:8px;">
+          <input type="tel" inputmode="numeric" placeholder="00-00000-00-00" value="${it.orderNumber || ''}" data-action="order-number" data-idx="${idx}">
+        </div>
+        <div class="row">
+          <label style="flex:0 0 auto; margin:0; align-self:center; color:var(--muted); font-size:0.8rem;">時間(h)</label>
+          <input type="number" step="0.25" min="0.25" inputmode="decimal" value="${it.hours}" data-action="item-hours" data-idx="${idx}">
+        </div>
+      </div>
+    `;
+  }
+  return `
+    <div class="item-card stop">
+      <div class="item-head">
+        <span class="tag stop">停止</span>
+        <button class="btn-danger" data-action="remove-item" data-idx="${idx}">削除</button>
+      </div>
+      <div class="row" style="margin-bottom:8px;">
+        <select data-action="stop-reason" data-idx="${idx}">
+          ${state.data.stopReasons.map(r => `<option value="${escapeHtml(r)}" ${it.reason === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="row">
+        <label style="flex:0 0 auto; margin:0; align-self:center; color:var(--muted); font-size:0.8rem;">時間(h)</label>
+        <input type="number" step="0.25" min="0.25" inputmode="decimal" value="${it.hours}" data-action="item-hours" data-idx="${idx}">
+      </div>
+    </div>
+  `;
+}
+
+function renderHistoryTab() {
+  const machines = state.data.machines;
+  const logs = [...state.data.logs]
+    .filter(l => state.historyFilterMachine === 'all' || l.machineId === state.historyFilterMachine)
+    .sort((a, b) => b.date.localeCompare(a.date) || b.savedAt - a.savedAt);
+
+  return `
+    <div class="filter-row">
+      <select id="history-filter">
+        <option value="all" ${state.historyFilterMachine === 'all' ? 'selected' : ''}>すべての機械</option>
+        ${machines.map(m => `<option value="${m.id}" ${state.historyFilterMachine === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <button class="btn" id="export-csv">CSV書き出し</button>
+    </div>
+    <div class="panel">
+      ${logs.length === 0 ? '<div class="empty">記録がまだありません</div>' : logs.map(l => renderLogEntry(l)).join('')}
+    </div>
+  `;
+}
+
+function renderLogEntry(l) {
+  const machine = getMachine(l.machineId);
+  const details = l.entries.map(e => e.type === 'order'
+    ? `${e.orderNumber} ${fmtHours(e.hours)}h`
+    : `⛔${e.reason} ${fmtHours(e.hours)}h`).join(' / ');
+  return `
+    <div class="log-entry">
+      <div class="log-entry-head">
+        <span class="date">${escapeHtml(l.date)}</span>
+        <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
+      </div>
+      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h</span><span>${fmtHours(l.startReading)} → ${fmtHours(l.endReading)}</span></div>
+      <div class="log-entry-sub" style="margin-top:4px;">${escapeHtml(details) || '（基準値記録）'}</div>
+    </div>
+  `;
+}
+
+function renderMasterTab() {
+  return `
+    <div class="panel">
+      <h2>機械一覧</h2>
+      ${state.data.machines.map(m => `
+        <div class="master-item">
+          <span>${escapeHtml(m.name)}</span>
+          <button class="btn-danger" data-action="delete-machine" data-id="${m.id}">削除</button>
+        </div>
+      `).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-machine-name" placeholder="新しい機械名">
+        <button class="btn" id="add-machine" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>停止理由一覧</h2>
+      ${state.data.stopReasons.map((r, idx) => `
+        <div class="master-item">
+          <span>${escapeHtml(r)}</span>
+          <button class="btn-danger" data-action="delete-reason" data-idx="${idx}">削除</button>
+        </div>
+      `).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-reason-name" placeholder="新しい停止理由">
+        <button class="btn" id="add-reason" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- event handling ----------
+function attachHandlers() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.onclick = () => { state.activeTab = btn.dataset.tab; render(); };
+  });
+
+  const machineSelect = document.getElementById('machine-select');
+  if (machineSelect) machineSelect.onchange = (e) => {
+    state.selectedMachineId = e.target.value;
+    state.entry = { reading: '', items: [] };
+    render();
+  };
+
+  const readingInput = document.getElementById('reading-input');
+  if (readingInput) {
+    readingInput.oninput = (e) => { state.entry.reading = e.target.value; render(); };
+    readingInput.focus();
+    readingInput.setSelectionRange(readingInput.value.length, readingInput.value.length);
+  }
+
+  const addOrderBtn = document.querySelector('[data-action="add-order"]');
+  if (addOrderBtn) addOrderBtn.onclick = () => {
+    state.entry.items.push({ id: uid(), type: 'order', orderNumber: '', hours: '' });
+    render();
+  };
+  const addStopBtn = document.querySelector('[data-action="add-stop"]');
+  if (addStopBtn) addStopBtn.onclick = () => {
+    state.entry.items.push({ id: uid(), type: 'stop', reason: state.data.stopReasons[0] || '', hours: '' });
+    render();
+  };
+
+  document.querySelectorAll('[data-action="remove-item"]').forEach(btn => {
+    btn.onclick = () => { state.entry.items.splice(parseInt(btn.dataset.idx), 1); render(); };
+  });
+  document.querySelectorAll('[data-action="order-number"]').forEach(inp => {
+    inp.oninput = (e) => {
+      const idx = parseInt(inp.dataset.idx);
+      const formatted = formatOrderNumber(e.target.value);
+      state.entry.items[idx].orderNumber = formatted;
+      const pos = formatted.length;
+      e.target.value = formatted;
+      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
+    };
+  });
+  document.querySelectorAll('[data-action="stop-reason"]').forEach(sel => {
+    sel.onchange = (e) => { state.entry.items[parseInt(sel.dataset.idx)].reason = e.target.value; };
+  });
+  document.querySelectorAll('[data-action="item-hours"]').forEach(inp => {
+    inp.oninput = (e) => { state.entry.items[parseInt(inp.dataset.idx)].hours = e.target.value; render(); };
+  });
+
+  const saveBtn = document.getElementById('save-btn');
+  if (saveBtn) saveBtn.onclick = handleSave;
+
+  const historyFilter = document.getElementById('history-filter');
+  if (historyFilter) historyFilter.onchange = (e) => { state.historyFilterMachine = e.target.value; render(); };
+
+  const exportBtn = document.getElementById('export-csv');
+  if (exportBtn) exportBtn.onclick = exportCsv;
+
+  const addMachineBtn = document.getElementById('add-machine');
+  if (addMachineBtn) addMachineBtn.onclick = async () => {
+    const inp = document.getElementById('new-machine-name');
+    const name = inp.value.trim();
+    if (!name) return;
+    state.data.machines.push({ id: uid(), name, lastReading: null, lastDate: null });
+    await saveData();
+    render();
+  };
+  document.querySelectorAll('[data-action="delete-machine"]').forEach(btn => {
+    btn.onclick = async () => {
+      state.data.machines = state.data.machines.filter(m => m.id !== btn.dataset.id);
+      if (state.selectedMachineId === btn.dataset.id) state.selectedMachineId = state.data.machines[0]?.id || null;
+      await saveData();
+      render();
+    };
+  });
+
+  const addReasonBtn = document.getElementById('add-reason');
+  if (addReasonBtn) addReasonBtn.onclick = async () => {
+    const inp = document.getElementById('new-reason-name');
+    const name = inp.value.trim();
+    if (!name) return;
+    state.data.stopReasons.push(name);
+    await saveData();
+    render();
+  };
+  document.querySelectorAll('[data-action="delete-reason"]').forEach(btn => {
+    btn.onclick = async () => {
+      state.data.stopReasons.splice(parseInt(btn.dataset.idx), 1);
+      await saveData();
+      render();
+    };
+  });
+}
+
+async function handleSave() {
+  const machine = getMachine(state.selectedMachineId);
+  const reading = parseFloat(state.entry.reading);
+  if (isNaN(reading)) return;
+  const hasPrev = machine.lastReading !== null && machine.lastReading !== undefined;
+
+  if (!hasPrev) {
+    machine.lastReading = reading;
+    machine.lastDate = todayStr();
+    await saveData();
+    state.entry = { reading: '', items: [] };
+    showToast('基準値を保存しました');
+    render();
+    return;
+  }
+
+  const elapsed = roundQuarter(Math.max(0, reading - machine.lastReading));
+  const log = {
+    id: uid(),
+    date: todayStr(),
+    machineId: machine.id,
+    startReading: machine.lastReading,
+    endReading: reading,
+    elapsedHours: elapsed,
+    entries: state.entry.items.map(it => it.type === 'order'
+      ? { type: 'order', orderNumber: it.orderNumber, hours: parseFloat(it.hours) }
+      : { type: 'stop', reason: it.reason, hours: parseFloat(it.hours) }),
+    savedAt: Date.now()
+  };
+  state.data.logs.push(log);
+  machine.lastReading = reading;
+  machine.lastDate = todayStr();
+  await saveData();
+  state.entry = { reading: '', items: [] };
+  showToast('記録を保存しました');
+  render();
+}
+
+function exportCsv() {
+  const rows = [['日付','機械','種別','受注番号/停止理由','時間(h)','開始値','終了値','経過時間(h)']];
+  state.data.logs
+    .slice()
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .forEach(l => {
+      const machine = getMachine(l.machineId);
+      if (l.entries.length === 0) {
+        rows.push([l.date, machine?.name || '', '', '', '', l.startReading, l.endReading, l.elapsedHours]);
+      } else {
+        l.entries.forEach(e => {
+          rows.push([
+            l.date, machine?.name || '',
+            e.type === 'order' ? '受注番号' : '停止',
+            e.type === 'order' ? e.orderNumber : e.reason,
+            e.hours, l.startReading, l.endReading, l.elapsedHours
+          ]);
+        });
+      }
+    });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `machine-log-${todayStr()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// ---------- init ----------
+(async function init() {
+  await loadData();
+  render();
+})();
+</script>
 </body>
 </html>
