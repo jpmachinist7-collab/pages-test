@@ -498,6 +498,17 @@ function renderMasterTab() {
         <button class="btn" id="add-reason" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
+    <div class="panel">
+      <h2>バックアップ</h2>
+      <div class="balance-text" style="margin-bottom:10px; text-align:left;">
+        端末やSafari/ホーム画面アイコンを切り替えるとデータが分かれて見えることがあります。定期的に書き出しておくと安心です。
+      </div>
+      <div class="add-row">
+        <button class="btn" id="export-backup">バックアップ書き出し</button>
+        <button class="btn" id="import-backup">復元（読み込み）</button>
+      </div>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+    </div>
   `;
 }
 
@@ -599,6 +610,42 @@ function attachHandlers() {
       render();
     };
   });
+
+  const exportBackupBtn = document.getElementById('export-backup');
+  if (exportBackupBtn) exportBackupBtn.onclick = () => {
+    const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `machine-log-backup-${todayStr()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const importBackupBtn = document.getElementById('import-backup');
+  const importFileInput = document.getElementById('import-file-input');
+  if (importBackupBtn && importFileInput) {
+    importBackupBtn.onclick = () => importFileInput.click();
+    importFileInput.onchange = async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (!parsed.machines || !parsed.stopReasons || !parsed.logs) throw new Error('形式が不正です');
+        if (!confirm('現在のデータを上書きして復元します。よろしいですか？')) return;
+        state.data = parsed;
+        await saveData();
+        showToast('復元しました');
+        render();
+      } catch (err) {
+        alert('読み込みに失敗しました: ' + err.message);
+      }
+      importFileInput.value = '';
+    };
+  }
 }
 
 async function handleSave() {
