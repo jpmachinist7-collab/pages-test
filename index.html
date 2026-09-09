@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.1</title>
+<title>稼働ログ v1.2</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -192,6 +192,70 @@
     opacity: 0; pointer-events: none; transition: opacity .25s; white-space: nowrap;
   }
   .toast.show { opacity: 1; }
+
+  /* ---------- process counter (工程カウンター) ---------- */
+  .mode-toggle {
+    display: flex;
+    gap: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 16px;
+  }
+  .mode-btn {
+    flex: 1;
+    background: none;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 9px 4px;
+    border-radius: 7px;
+  }
+  .mode-btn.active { background: var(--cyan); color: #04202a; }
+  .order-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .order-card.running { border-color: var(--cyan); }
+  .order-card-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .order-card-head .order-no { font-size: 1rem; font-weight: 700; letter-spacing: 0.02em; }
+  .play-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--panel-2); color: var(--cyan);
+    border: 1px solid var(--cyan-dim); font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order-card.running .play-btn { background: var(--cyan); color: #04202a; }
+  .process-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .process-chip {
+    background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 20px; font-size: 0.8rem;
+  }
+  .process-chip.selected { background: var(--cyan-dim); color: var(--cyan); border-color: var(--cyan); }
+  .order-timer {
+    text-align: center; font-size: 1.7rem; font-weight: 700; color: var(--cyan);
+    font-variant-numeric: tabular-nums;
+  }
+  .order-timer-label { text-align: center; font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; }
+  .process-breakdown { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .process-breakdown-row {
+    display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); padding: 3px 0;
+  }
+  .remove-order-btn {
+    background: none; color: var(--red); border: none; font-size: 0.75rem; margin-top: 8px;
+  }
+  .finalize-panel {
+    background: var(--panel); border: 1px solid var(--cyan-dim); border-radius: 10px;
+    padding: 14px; margin-top: 4px;
+  }
 </style>
 </head>
 <body>
@@ -261,12 +325,16 @@ function defaultData() {
   return {
     machines: [{ id: uid(), name: 'マシニング1号機', lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' }],
     stopReasons: ['段取り替え', '工具交換', 'チョコ停', '材料待ち', '計画停止', 'その他'],
-    logs: []
+    logs: [],
+    processes: ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'],
+    activeOrders: [],
+    processLogs: []
   };
 }
 
 let state = {
   data: null,
+  mode: 'machine',
   activeTab: 'record',
   selectedMachineId: null,
   endDigits: '',
@@ -276,7 +344,12 @@ let state = {
   editingMachineId: null,
   editMachineName: '',
   editingReasonIdx: null,
-  editReasonName: ''
+  editReasonName: '',
+  newOrderDigits: '',
+  editingProcessIdx: null,
+  editProcessName: '',
+  processHistoryExpandedDate: null,
+  showFinalizeConfirm: false
 };
 
 async function loadData() {
@@ -286,6 +359,10 @@ async function loadData() {
   } else {
     state.data = defaultData();
   }
+  // backward compatibility for data saved before the process-counter feature existed
+  if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
+  if (!state.data.activeOrders) state.data.activeOrders = [];
+  if (!state.data.processLogs) state.data.processLogs = [];
   if (!state.selectedMachineId && state.data.machines.length) {
     state.selectedMachineId = state.data.machines[0].id;
   }
@@ -324,11 +401,13 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.1</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.2</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
-    ${state.activeTab === 'record' ? renderRecordTab() : ''}
-    ${state.activeTab === 'history' ? renderHistoryTab() : ''}
-    ${state.activeTab === 'master' ? renderMasterTab() : ''}
+    <div class="mode-toggle">
+      <button class="mode-btn ${state.mode === 'machine' ? 'active' : ''}" data-mode="machine">機械稼働</button>
+      <button class="mode-btn ${state.mode === 'process' ? 'active' : ''}" data-mode="process">工程カウンター</button>
+    </div>
+    ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
       ${tabBtn('record', '記録')}
       ${tabBtn('history', '履歴')}
@@ -336,6 +415,20 @@ function render() {
     </div>
   `;
   attachHandlers();
+}
+function renderMachineMode() {
+  return `
+    ${state.activeTab === 'record' ? renderRecordTab() : ''}
+    ${state.activeTab === 'history' ? renderHistoryTab() : ''}
+    ${state.activeTab === 'master' ? renderMasterTab() : ''}
+  `;
+}
+function renderProcessMode() {
+  return `
+    ${state.activeTab === 'record' ? renderProcessRecordTab() : ''}
+    ${state.activeTab === 'history' ? renderProcessHistoryTab() : ''}
+    ${state.activeTab === 'master' ? renderProcessMasterTab() : ''}
+  `;
 }
 function tabBtn(id, label) {
   return `<button class="tab-btn ${state.activeTab === id ? 'active' : ''}" data-tab="${id}"><span class="dot"></span>${label}</button>`;
@@ -532,6 +625,144 @@ function renderReasonRow(r, idx) {
   `;
 }
 
+function fmtDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function orderTotalSeconds(order) {
+  return Object.values(order.totals || {}).reduce((a, b) => a + b, 0);
+}
+function orderCurrentDisplaySeconds(order, processName) {
+  const base = (order.totals && order.totals[processName]) || 0;
+  if (order.running && order.currentProcess === processName && order.lastResumeAt) {
+    return base + (Date.now() - order.lastResumeAt) / 1000;
+  }
+  return base;
+}
+
+function renderProcessRecordTab() {
+  const processes = state.data.processes;
+  const orders = state.data.activeOrders;
+  const anyRunning = orders.some(o => o.running);
+  const grandTotal = orders.reduce((s, o) => s + orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0), 0);
+
+  return `
+    <div class="panel">
+      <label>受注番号を追加</label>
+      <div class="row">
+        <input type="tel" inputmode="numeric" id="new-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.newOrderDigits)}">
+        <button class="btn" id="add-order-btn" style="flex:0 0 auto;" ${orderNumberDigitCount(state.newOrderDigits) === 15 ? '' : 'disabled'}>追加</button>
+      </div>
+    </div>
+
+    ${orders.length === 0 ? '<div class="panel empty">受注番号を追加すると、ここに作業カードが表示されます</div>' :
+      orders.map(o => renderOrderCard(o, processes)).join('')}
+
+    ${orders.length > 0 ? `
+      <div class="finalize-panel">
+        <div class="stat"><span>本日の合計</span><b>${fmtDuration(grandTotal)}</b></div>
+        <button class="btn-primary" id="finalize-btn" style="margin-top:8px;" ${anyRunning ? '' : ''}>本日の集計を確定してリセット</button>
+        <div class="stat" style="justify-content:center; margin-top:6px;">確定すると履歴に保存され、カードはリセットされます</div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderOrderCard(o, processes) {
+  const total = orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0);
+  return `
+    <div class="order-card ${o.running ? 'running' : ''}">
+      <div class="order-card-head">
+        <span class="order-no">${escapeHtml(o.orderNumber)}</span>
+        <button class="play-btn" data-action="toggle-run" data-id="${o.id}">${o.running ? '⏸' : '▶'}</button>
+      </div>
+      <div class="process-chips">
+        ${processes.map(p => `<button class="process-chip ${o.currentProcess === p ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join('')}
+      </div>
+      <div class="order-timer-label">${o.currentProcess ? escapeHtml(o.currentProcess) + ' 作業中の合計' : '工程を選択してください'}</div>
+      <div class="order-timer" data-timer-total="${o.id}">${fmtDuration(total)}</div>
+      ${Object.keys(o.totals || {}).length > 0 ? `
+        <div class="process-breakdown">
+          ${Object.entries(o.totals).filter(([,v]) => v > 0).map(([p, v]) => `
+            <div class="process-breakdown-row"><span>${escapeHtml(p)}</span><span data-timer-proc="${o.id}:${escapeHtml(p)}">${fmtDuration(orderCurrentDisplaySeconds(o, p))}</span></div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <button class="remove-order-btn" data-action="remove-order" data-id="${o.id}">この受注番号を取り消す</button>
+    </div>
+  `;
+}
+
+function renderProcessHistoryTab() {
+  const byDate = {};
+  state.data.processLogs.forEach(l => { (byDate[l.date] = byDate[l.date] || []).push(l); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  return `
+    <div class="filter-row">
+      <div></div>
+      <button class="btn" id="export-process-csv">CSV書き出し</button>
+    </div>
+    <div class="panel">
+      ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderProcessDateRow(d, byDate[d])).join('')}
+    </div>
+  `;
+}
+function renderProcessDateRow(date, logs) {
+  const total = logs.reduce((s, l) => s + l.seconds, 0);
+  const expanded = state.processHistoryExpandedDate === date;
+  return `
+    <div>
+      <div class="date-row" data-action="toggle-process-date" data-date="${date}">
+        <div>
+          <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
+          <div class="d-sub">${logs.length}件 / 合計 ${fmtDuration(total)}</div>
+        </div>
+        <div class="chev">${expanded ? '▲' : '▼'}</div>
+      </div>
+      ${expanded ? `<div class="date-detail">${logs.map(l => `
+        <div class="log-entry">
+          <div class="log-entry-head"><span class="log-entry-order">${escapeHtml(l.orderNumber)}</span><span class="machine">${escapeHtml(l.process)}</span></div>
+          <div class="log-entry-sub"><span>${fmtDuration(l.seconds)}</span></div>
+        </div>
+      `).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderProcessMasterTab() {
+  return `
+    <div class="panel">
+      <h2>工程一覧</h2>
+      ${state.data.processes.map((p, idx) => renderProcessRow(p, idx)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-process-name" placeholder="新しい工程名">
+        <button class="btn" id="add-process" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+  `;
+}
+function renderProcessRow(p, idx) {
+  if (state.editingProcessIdx === idx) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-process-input" value="${escapeHtml(state.editProcessName)}" style="flex:1;">
+        <button class="btn" data-action="save-process-name" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-process" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(p)}</span>
+      <button class="btn" data-action="edit-process" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-process" data-idx="${idx}">削除</button>
+    </div>
+  `;
+}
+
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -539,6 +770,9 @@ function escapeHtml(s) {
 function attachHandlers() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.onclick = () => { state.activeTab = btn.dataset.tab; render(); };
+  });
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.onclick = () => { state.mode = btn.dataset.mode; state.activeTab = 'record'; render(); };
   });
 
   const machineSelect = document.getElementById('machine-select');
@@ -700,6 +934,9 @@ function attachHandlers() {
         if (!parsed.machines || !parsed.stopReasons || !parsed.logs) throw new Error('形式が不正です');
         if (!confirm('現在のデータを上書きして復元します。よろしいですか？')) return;
         state.data = parsed;
+        if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
+        if (!state.data.activeOrders) state.data.activeOrders = [];
+        if (!state.data.processLogs) state.data.processLogs = [];
         await saveData();
         showToast('復元しました');
         render();
@@ -709,7 +946,183 @@ function attachHandlers() {
       importFileInput.value = '';
     };
   }
+
+  // ---------- process counter (工程カウンター) ----------
+  const newOrderInput = document.getElementById('new-order-input');
+  if (newOrderInput) {
+    newOrderInput.oninput = (e) => {
+      state.newOrderDigits = e.target.value.replace(/\D/g, '').slice(0, 15);
+      const formatted = formatOrderNumber(state.newOrderDigits);
+      e.target.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
+      const btn = document.getElementById('add-order-btn');
+      if (btn) btn.disabled = orderNumberDigitCount(state.newOrderDigits) !== 15;
+    };
+  }
+  const addOrderBtn = document.getElementById('add-order-btn');
+  if (addOrderBtn) addOrderBtn.onclick = async () => {
+    if (orderNumberDigitCount(state.newOrderDigits) !== 15) return;
+    state.data.activeOrders.push({
+      id: uid(),
+      orderNumber: formatOrderNumber(state.newOrderDigits),
+      currentProcess: null,
+      running: false,
+      lastResumeAt: null,
+      totals: {}
+    });
+    state.newOrderDigits = '';
+    await saveData();
+    render();
+  };
+
+  document.querySelectorAll('[data-action="toggle-run"]').forEach(btn => {
+    btn.onclick = async () => {
+      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
+      if (!order.currentProcess) { showToast('先に工程を選んでください'); return; }
+      if (order.running) {
+        flushOrder(order);
+        order.running = false;
+        order.lastResumeAt = null;
+      } else {
+        // pause any other running order first
+        state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
+        order.running = true;
+        order.lastResumeAt = Date.now();
+      }
+      await saveData();
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-action="select-process"]').forEach(btn => {
+    btn.onclick = async () => {
+      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
+      const newProcess = btn.dataset.process;
+      if (order.currentProcess === newProcess) return;
+      if (order.running) flushOrder(order);
+      order.currentProcess = newProcess;
+      if (order.running) order.lastResumeAt = Date.now();
+      await saveData();
+      render();
+    };
+  });
+
+  document.querySelectorAll('[data-action="remove-order"]').forEach(btn => {
+    btn.onclick = async () => {
+      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
+      if (order && orderTotalSeconds(order) > 0) {
+        if (!confirm('この受注番号にはすでに記録された時間があります。取り消すと失われますがよろしいですか？')) return;
+      }
+      state.data.activeOrders = state.data.activeOrders.filter(o => o.id !== btn.dataset.id);
+      await saveData();
+      render();
+    };
+  });
+
+  const finalizeBtn = document.getElementById('finalize-btn');
+  if (finalizeBtn) finalizeBtn.onclick = async () => {
+    if (!confirm('本日の集計を履歴に保存し、カードをリセットします。よろしいですか？')) return;
+    const date = todayStr();
+    state.data.activeOrders.forEach(o => {
+      if (o.running) flushOrder(o);
+      Object.entries(o.totals || {}).forEach(([process, seconds]) => {
+        if (seconds > 0) {
+          state.data.processLogs.push({ id: uid(), date, orderNumber: o.orderNumber, process, seconds, savedAt: Date.now() });
+        }
+      });
+    });
+    state.data.activeOrders = [];
+    await saveData();
+    showToast('集計を保存しました');
+    render();
+  };
+
+  document.querySelectorAll('[data-action="toggle-process-date"]').forEach(el => {
+    el.onclick = () => {
+      const d = el.dataset.date;
+      state.processHistoryExpandedDate = state.processHistoryExpandedDate === d ? null : d;
+      render();
+    };
+  });
+
+  const exportProcessCsvBtn = document.getElementById('export-process-csv');
+  if (exportProcessCsvBtn) exportProcessCsvBtn.onclick = () => {
+    const rows = [['日付','受注番号','工程','時間(hh:mm:ss)','秒数']];
+    state.data.processLogs
+      .slice()
+      .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
+      .forEach(l => rows.push([l.date, l.orderNumber, l.process, fmtDuration(l.seconds), Math.round(l.seconds)]));
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    shareOrDownload('\uFEFF' + csv, `process-log-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
+  };
+
+  const addProcessBtn = document.getElementById('add-process');
+  if (addProcessBtn) addProcessBtn.onclick = async () => {
+    const inp = document.getElementById('new-process-name');
+    const name = inp.value.trim();
+    if (!name) return;
+    state.data.processes.push(name);
+    await saveData();
+    render();
+  };
+  document.querySelectorAll('[data-action="delete-process"]').forEach(btn => {
+    btn.onclick = async () => {
+      state.data.processes.splice(parseInt(btn.dataset.idx), 1);
+      await saveData();
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="edit-process"]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.idx);
+      state.editingProcessIdx = idx;
+      state.editProcessName = state.data.processes[idx];
+      render();
+      const inp = document.getElementById('edit-process-input');
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    };
+  });
+  const cancelEditProcess = document.querySelector('[data-action="cancel-edit-process"]');
+  if (cancelEditProcess) cancelEditProcess.onclick = () => { state.editingProcessIdx = null; render(); };
+  const editProcessInput = document.getElementById('edit-process-input');
+  if (editProcessInput) editProcessInput.oninput = (e) => { state.editProcessName = e.target.value; };
+  document.querySelectorAll('[data-action="save-process-name"]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = state.editProcessName.trim();
+      if (!name) return;
+      const idx = parseInt(btn.dataset.idx);
+      state.data.processes[idx] = name;
+      state.editingProcessIdx = null;
+      await saveData();
+      render();
+    };
+  });
 }
+
+// accumulate a running order's elapsed time into its totals (called before pausing/switching)
+function flushOrder(order) {
+  if (order.running && order.lastResumeAt && order.currentProcess) {
+    const elapsed = (Date.now() - order.lastResumeAt) / 1000;
+    order.totals[order.currentProcess] = (order.totals[order.currentProcess] || 0) + elapsed;
+  }
+  order.lastResumeAt = Date.now();
+}
+
+// lightweight per-second refresh of visible timers without a full re-render
+setInterval(() => {
+  if (state.mode !== 'process' || state.activeTab !== 'record') return;
+  const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
+  if (!anyRunning) return;
+  state.data.activeOrders.forEach(o => {
+    const totalEl = document.querySelector(`[data-timer-total="${o.id}"]`);
+    if (totalEl) totalEl.textContent = fmtDuration(orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0));
+    if (o.running && o.currentProcess) {
+      const procEl = document.querySelector(`[data-timer-proc="${o.id}:${o.currentProcess}"]`);
+      if (procEl) procEl.textContent = fmtDuration(orderCurrentDisplaySeconds(o, o.currentProcess));
+    }
+  });
+}, 1000);
 
 // lightweight refresh of just the save button's disabled state, to avoid losing focus while typing order number
 function renderSaveButtonOnly() {
