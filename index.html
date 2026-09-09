@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.4</title>
+<title>稼働ログ v1.8</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -336,10 +336,10 @@ function defaultData() {
 let state = {
   data: null,
   mode: 'machine',
-  activeTab: 'record',
+  tabByMode: { machine: 'record', process: 'record' },
   selectedMachineId: null,
   endDigits: '',
-  stopReason: '',
+  stopReasons: [],
   historyFilterMachine: 'all',
   expandedDate: null,
   editingMachineId: null,
@@ -404,7 +404,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.5</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.8</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -428,22 +428,25 @@ function refreshVolatileUiBits() {
   // pop unexpectedly on unrelated re-renders, e.g. right after tapping a bottom tab,
   // which shifted the layout and made the next tap land on the wrong element)
 }
+function getActiveTab() { return state.tabByMode[state.mode]; }
 function renderMachineMode() {
+  const tab = state.tabByMode.machine;
   return `
-    ${state.activeTab === 'record' ? renderRecordTab() : ''}
-    ${state.activeTab === 'history' ? renderHistoryTab() : ''}
-    ${state.activeTab === 'master' ? renderMasterTab() : ''}
+    ${tab === 'record' ? renderRecordTab() : ''}
+    ${tab === 'history' ? renderHistoryTab() : ''}
+    ${tab === 'master' ? renderMasterTab() : ''}
   `;
 }
 function renderProcessMode() {
+  const tab = state.tabByMode.process;
   return `
-    ${state.activeTab === 'record' ? renderProcessRecordTab() : ''}
-    ${state.activeTab === 'history' ? renderProcessHistoryTab() : ''}
-    ${state.activeTab === 'master' ? renderProcessMasterTab() : ''}
+    ${tab === 'record' ? renderProcessRecordTab() : ''}
+    ${tab === 'history' ? renderProcessHistoryTab() : ''}
+    ${tab === 'master' ? renderProcessMasterTab() : ''}
   `;
 }
 function tabBtn(id, label) {
-  return `<button class="tab-btn ${state.activeTab === id ? 'active' : ''}" data-tab="${id}"><span class="dot"></span>${label}</button>`;
+  return `<button class="tab-btn ${getActiveTab() === id ? 'active' : ''}" data-tab="${id}"><span class="dot"></span>${label}</button>`;
 }
 function getMachine(id) { return state.data.machines.find(m => m.id === id); }
 
@@ -477,7 +480,8 @@ function renderRecordTab() {
   }
 
   const endMinutes = digitsToMinutes(state.endDigits);
-  const elapsed = endMinutes !== null ? roundQuarter(Math.max(0, endMinutes - machine.lastReadingMinutes) / 60) : null;
+  const rawElapsed = endMinutes !== null ? Math.max(0, endMinutes - machine.lastReadingMinutes) / 60 : null;
+  const elapsed = rawElapsed !== null ? roundQuarter(rawElapsed) : null;
   const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
   const canSave = orderComplete && endMinutes !== null;
 
@@ -487,7 +491,10 @@ function renderRecordTab() {
       <div class="stat"><span>${escapeHtml(fmtDateJp(machine.lastDate))}</span><b>${minutesToDisplay(machine.lastReadingMinutes)}</b></div>
       <div class="field" style="margin-top:10px;">
         <label>受注番号</label>
-        <input type="tel" inputmode="numeric" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
+        <div class="row">
+          <input type="tel" inputmode="numeric" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
+          <button class="btn-danger" data-action="clear-order-number" data-id="${machine.id}" style="flex:0 0 auto;">削除</button>
+        </div>
       </div>
     </div>
 
@@ -500,15 +507,14 @@ function renderRecordTab() {
       ${elapsed !== null ? `
         <div class="elapsed-display">
           <div class="num">${fmtHours(elapsed)} h</div>
-          <div class="label">経過時間（0.25h単位に丸め）</div>
+          <div class="label">経過時間（0.25h単位に丸め）／ 丸め前：${fmtHours(rawElapsed)}h</div>
         </div>
       ` : ''}
       <div class="field">
-        <label>停止理由（あれば選択・任意）</label>
-        <select id="stop-reason-select">
-          <option value="" ${state.stopReason === '' ? 'selected' : ''}>なし</option>
-          ${state.data.stopReasons.map(r => `<option value="${escapeHtml(r)}" ${state.stopReason === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
-        </select>
+        <label>停止理由（あれば選択・複数選択可・任意）</label>
+        <div class="process-chips">
+          ${state.data.stopReasons.map(r => `<button class="process-chip ${state.stopReasons.includes(r) ? 'selected' : ''}" data-action="toggle-stop-reason" data-reason="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}
+        </div>
       </div>
     </div>
 
@@ -557,14 +563,16 @@ function renderDateRow(date, logs) {
 
 function renderLogEntry(l) {
   const machine = getMachine(l.machineId);
+  const reasons = l.stopReasons || (l.stopReason ? [l.stopReason] : []);
+  const rawLabel = (l.rawElapsedHours !== undefined && l.rawElapsedHours !== null) ? `（丸め前 ${fmtHours(l.rawElapsedHours)}h）` : '';
   return `
     <div class="log-entry">
       <div class="log-entry-head">
         <span class="log-entry-order">${escapeHtml(l.orderNumber)}</span>
         <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
       </div>
-      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
-      ${l.stopReason ? `<div class="stop-chip">⛔ ${escapeHtml(l.stopReason)}</div>` : ''}
+      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h ${rawLabel}</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
+      ${reasons.length > 0 ? `<div>${reasons.map(r => `<span class="stop-chip" style="margin-right:4px;">⛔ ${escapeHtml(r)}</span>`).join('')}</div>` : ''}
     </div>
   `;
 }
@@ -884,13 +892,27 @@ function bindDelegatedHandlers() {
     const t = e.target.closest('[data-tab],[data-mode],[data-action]');
     if (!t) return;
 
-    if (t.dataset.tab) { state.activeTab = t.dataset.tab; render(); return; }
-    if (t.dataset.mode) { state.mode = t.dataset.mode; state.activeTab = 'record'; render(); return; }
+    if (t.dataset.tab) { state.tabByMode[state.mode] = t.dataset.tab; render(); return; }
+    if (t.dataset.mode) { state.mode = t.dataset.mode; render(); return; }
 
     const action = t.dataset.action;
     switch (action) {
       case 'save-base': await handleSaveBase(); break;
       case 'save-cycle': await handleSaveCycle(); break;
+      case 'toggle-stop-reason': {
+        const r = t.dataset.reason;
+        const idx = state.stopReasons.indexOf(r);
+        if (idx === -1) state.stopReasons.push(r); else state.stopReasons.splice(idx, 1);
+        render();
+        break;
+      }
+      case 'clear-order-number': {
+        const m = getMachine(t.dataset.id);
+        m.pendingOrderDigits = '';
+        await saveData();
+        render();
+        break;
+      }
 
       case 'add-machine-btn': {
         const inp = document.getElementById('new-machine-name');
@@ -1195,10 +1217,8 @@ function bindDelegatedHandlers() {
     if (el.id === 'machine-select') {
       state.selectedMachineId = el.value;
       state.endDigits = '';
-      state.stopReason = '';
+      state.stopReasons = [];
       render();
-    } else if (el.id === 'stop-reason-select') {
-      state.stopReason = el.value;
     } else if (el.id === 'history-filter') {
       state.historyFilterMachine = el.value;
       render();
@@ -1236,7 +1256,7 @@ function flushOrder(order) {
 
 // lightweight per-second refresh of visible timers without a full re-render
 setInterval(() => {
-  if (state.mode !== 'process' || state.activeTab !== 'record') return;
+  if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
   const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
   if (!anyRunning) return;
   state.data.activeOrders.forEach(o => {
@@ -1269,7 +1289,8 @@ async function handleSaveCycle() {
   const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
   if (endMinutes === null || !orderComplete) return;
 
-  const elapsed = roundQuarter(Math.max(0, endMinutes - machine.lastReadingMinutes) / 60);
+  const rawElapsedHours = Math.max(0, endMinutes - machine.lastReadingMinutes) / 60;
+  const elapsed = roundQuarter(rawElapsedHours);
   const log = {
     id: uid(),
     date: todayStr(),
@@ -1277,32 +1298,34 @@ async function handleSaveCycle() {
     startMinutes: machine.lastReadingMinutes,
     endMinutes: endMinutes,
     elapsedHours: elapsed,
+    rawElapsedHours: rawElapsedHours,
     orderNumber: formatOrderNumber(machine.pendingOrderDigits),
-    stopReason: state.stopReason || null,
+    stopReasons: [...state.stopReasons],
     savedAt: Date.now()
   };
   state.data.logs.push(log);
   machine.lastReadingMinutes = endMinutes;
   machine.lastReadingDigits = state.endDigits;
   machine.lastDate = todayStr();
-  machine.pendingOrderDigits = '';
   await saveData();
   state.endDigits = '';
-  state.stopReason = '';
+  state.stopReasons = [];
   showToast('記録を保存しました');
   render();
 }
 
 function exportCsv() {
-  const rows = [['日付','機械','受注番号','停止理由','経過時間(h)','開始値','終了値']];
+  const rows = [['日付','機械','受注番号','停止理由','経過時間(h)','丸め前経過時間(h)','開始値','終了値']];
   state.data.logs
     .slice()
     .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
     .forEach(l => {
       const machine = getMachine(l.machineId);
+      const reasons = l.stopReasons || (l.stopReason ? [l.stopReason] : []);
       rows.push([
-        l.date, machine?.name || '', l.orderNumber, l.stopReason || '',
-        l.elapsedHours, minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes)
+        l.date, machine?.name || '', l.orderNumber, reasons.join(' / '),
+        l.elapsedHours, (l.rawElapsedHours !== undefined ? Math.round(l.rawElapsedHours * 100) / 100 : ''),
+        minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes)
       ]);
     });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
