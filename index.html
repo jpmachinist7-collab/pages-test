@@ -404,7 +404,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.4</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.5</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -419,7 +419,14 @@ function render() {
       </div>
     </div>
   `;
-  attachHandlers();
+  refreshVolatileUiBits();
+}
+// small per-render tasks that don't need full event (re)binding, since events are
+// handled by permanent delegated listeners set up once in bindDelegatedHandlers()
+function refreshVolatileUiBits() {
+  // (intentionally left minimal: auto-focusing inputs here caused the keyboard to
+  // pop unexpectedly on unrelated re-renders, e.g. right after tapping a bottom tab,
+  // which shifted the layout and made the next tap land on the wrong element)
 }
 function renderMachineMode() {
   return `
@@ -465,7 +472,7 @@ function renderRecordTab() {
         <label>基準となるカウンター値（機械の表示のまま）</label>
         <input type="tel" inputmode="numeric" id="base-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
       </div>
-      <button class="btn-primary" id="save-base-btn" ${currentMinutes === null ? 'disabled' : ''}>基準として保存</button>
+      <button class="btn-primary" id="save-base-btn" data-action="save-base" ${currentMinutes === null ? 'disabled' : ''}>基準として保存</button>
     `;
   }
 
@@ -505,7 +512,7 @@ function renderRecordTab() {
       </div>
     </div>
 
-    <button class="btn-primary" id="save-cycle-btn" ${canSave ? '' : 'disabled'}>この記録を保存</button>
+    <button class="btn-primary" id="save-cycle-btn" data-action="save-cycle" ${canSave ? '' : 'disabled'}>この記録を保存</button>
     ${!orderComplete && machine.pendingOrderDigits ? `<div class="stat" style="justify-content:center; margin-top:8px;">受注番号は15桁必要です</div>` : ''}
   `;
 }
@@ -523,7 +530,7 @@ function renderHistoryTab() {
         <option value="all" ${state.historyFilterMachine === 'all' ? 'selected' : ''}>すべての機械</option>
         ${machines.map(m => `<option value="${m.id}" ${state.historyFilterMachine === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
       </select>
-      <button class="btn" id="export-csv">CSV書き出し</button>
+      <button class="btn" id="export-csv" data-action="export-csv">CSV書き出し</button>
     </div>
     <div class="panel">
       ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderDateRow(d, byDate[d])).join('')}
@@ -569,7 +576,7 @@ function renderMasterTab() {
       ${state.data.machines.map(m => renderMachineRow(m)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="new-machine-name" placeholder="新しい機械名">
-        <button class="btn" id="add-machine" style="flex:0 0 auto;">追加</button>
+        <button class="btn" id="add-machine" data-action="add-machine-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
     <div class="panel">
@@ -577,15 +584,15 @@ function renderMasterTab() {
       ${state.data.stopReasons.map((r, idx) => renderReasonRow(r, idx)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="new-reason-name" placeholder="新しい停止理由">
-        <button class="btn" id="add-reason" style="flex:0 0 auto;">追加</button>
+        <button class="btn" id="add-reason" data-action="add-reason-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
     <div class="panel">
       <h2>バックアップ</h2>
       <div class="stat" style="display:block; margin-bottom:10px;">端末やSafari/ホーム画面アイコンを切り替えるとデータが分かれて見えることがあります。定期的に書き出しておくと安心です。</div>
       <div class="add-row">
-        <button class="btn" id="export-backup">バックアップ書き出し</button>
-        <button class="btn" id="import-backup">復元（読み込み）</button>
+        <button class="btn" id="export-backup" data-action="export-backup">バックアップ書き出し</button>
+        <button class="btn" id="import-backup" data-action="import-backup-btn">復元（読み込み）</button>
       </div>
       <input type="file" id="import-file-input" accept="application/json" style="display:none;">
     </div>
@@ -671,7 +678,7 @@ function renderProcessRecordTab() {
       <label>受注番号を追加</label>
       <div class="row">
         <input type="tel" inputmode="numeric" id="new-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.newOrderDigits)}">
-        <button class="btn" id="add-order-btn" style="flex:0 0 auto;" ${orderNumberDigitCount(state.newOrderDigits) === 15 ? '' : 'disabled'}>追加</button>
+        <button class="btn" id="add-order-btn" data-action="add-order" style="flex:0 0 auto;" ${orderNumberDigitCount(state.newOrderDigits) === 15 ? '' : 'disabled'}>追加</button>
       </div>
     </div>
 
@@ -681,7 +688,7 @@ function renderProcessRecordTab() {
     ${orders.length > 0 ? `
       <div class="finalize-panel">
         <div class="stat"><span>本日の合計</span><b>${fmtDualTime(grandTotal)}</b></div>
-        <button class="btn-primary" id="finalize-btn" style="margin-top:8px;" ${anyRunning ? '' : ''}>本日の集計を確定してリセット</button>
+        <button class="btn-primary" id="finalize-btn" data-action="finalize" style="margin-top:8px;">本日の集計を確定してリセット</button>
         <div class="stat" style="justify-content:center; margin-top:6px;">確定すると履歴に保存され、カードはリセットされます</div>
       </div>
     ` : ''}
@@ -797,8 +804,8 @@ function renderProcessHistoryTab() {
   return `
     ${renderProcessChart()}
     <div class="filter-row">
-      <div></div>
-      <button class="btn" id="export-process-csv">CSV書き出し</button>
+      <button class="btn-danger" data-action="clear-all-process-logs" ${dates.length === 0 ? 'disabled' : ''}>全履歴を削除</button>
+      <button class="btn" id="export-process-csv" data-action="export-process-csv">CSV書き出し</button>
     </div>
     <div class="panel">
       ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderProcessDateRow(d, byDate[d])).join('')}
@@ -810,17 +817,21 @@ function renderProcessDateRow(date, logs) {
   const expanded = state.processHistoryExpandedDate === date;
   return `
     <div>
-      <div class="date-row" data-action="toggle-process-date" data-date="${date}">
-        <div>
+      <div class="date-row">
+        <div data-action="toggle-process-date" data-date="${date}" style="flex:1;">
           <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
           <div class="d-sub">${logs.length}件 / 合計 ${fmtDualTime(total)}</div>
         </div>
-        <div class="chev">${expanded ? '▲' : '▼'}</div>
+        <button class="btn-danger" data-action="delete-process-date" data-date="${date}" style="margin-right:8px;">削除</button>
+        <div class="chev" data-action="toggle-process-date" data-date="${date}">${expanded ? '▲' : '▼'}</div>
       </div>
       ${expanded ? `<div class="date-detail">${logs.map(l => `
         <div class="log-entry">
           <div class="log-entry-head"><span class="log-entry-order">${escapeHtml(l.orderNumber)}</span><span class="machine">${escapeHtml(l.process)}</span></div>
-          <div class="log-entry-sub"><span>${fmtDualTime(l.seconds)}</span></div>
+          <div class="log-entry-sub">
+            <span>${fmtDualTime(l.seconds)}</span>
+            <button class="btn-danger" data-action="delete-process-log" data-id="${l.id}">削除</button>
+          </div>
         </div>
       `).join('')}</div>` : ''}
     </div>
@@ -834,7 +845,7 @@ function renderProcessMasterTab() {
       ${state.data.processes.map((p, idx) => renderProcessRow(p, idx)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="new-process-name" placeholder="新しい工程名">
-        <button class="btn" id="add-process" style="flex:0 0 auto;">追加</button>
+        <button class="btn" id="add-process" data-action="add-process-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
   `;
@@ -862,166 +873,337 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-function attachHandlers() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.onclick = () => { state.activeTab = btn.dataset.tab; render(); };
+// ---------- event handling: permanent delegated listeners (bound once in init) ----------
+// Binding directly to #app (which itself is never replaced, only its innerHTML)
+// avoids the iOS Safari issue where re-binding onclick on freshly-created elements
+// after every render() can require an extra tap before it registers.
+function bindDelegatedHandlers() {
+  const app = document.getElementById('app');
+
+  app.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-tab],[data-mode],[data-action]');
+    if (!t) return;
+
+    if (t.dataset.tab) { state.activeTab = t.dataset.tab; render(); return; }
+    if (t.dataset.mode) { state.mode = t.dataset.mode; state.activeTab = 'record'; render(); return; }
+
+    const action = t.dataset.action;
+    switch (action) {
+      case 'save-base': await handleSaveBase(); break;
+      case 'save-cycle': await handleSaveCycle(); break;
+
+      case 'add-machine-btn': {
+        const inp = document.getElementById('new-machine-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' });
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-machine': {
+        state.data.machines = state.data.machines.filter(m => m.id !== t.dataset.id);
+        if (state.selectedMachineId === t.dataset.id) state.selectedMachineId = state.data.machines[0]?.id || null;
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-machine': {
+        const m = getMachine(t.dataset.id);
+        state.editingMachineId = m.id;
+        state.editMachineName = m.name;
+        render();
+        const inp = document.getElementById('edit-machine-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-machine': state.editingMachineId = null; render(); break;
+      case 'save-machine-name': {
+        const name = state.editMachineName.trim();
+        if (!name) return;
+        const m = getMachine(t.dataset.id);
+        m.name = name;
+        state.editingMachineId = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'add-reason-btn': {
+        const inp = document.getElementById('new-reason-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.stopReasons.push(name);
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-reason': {
+        state.data.stopReasons.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-reason': {
+        const idx = parseInt(t.dataset.idx);
+        state.editingReasonIdx = idx;
+        state.editReasonName = state.data.stopReasons[idx];
+        render();
+        const inp = document.getElementById('edit-reason-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-reason': state.editingReasonIdx = null; render(); break;
+      case 'save-reason-name': {
+        const name = state.editReasonName.trim();
+        if (!name) return;
+        const idx = parseInt(t.dataset.idx);
+        state.data.stopReasons[idx] = name;
+        state.editingReasonIdx = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'toggle-date': {
+        const d = t.dataset.date;
+        state.expandedDate = state.expandedDate === d ? null : d;
+        render();
+        break;
+      }
+      case 'export-csv': exportCsv(); break;
+      case 'export-backup':
+        shareOrDownload(JSON.stringify(state.data, null, 2), `machine-log-backup-${todayStr()}.json`, 'application/json');
+        break;
+      case 'import-backup-btn': document.getElementById('import-file-input').click(); break;
+
+      // ---------- process counter ----------
+      case 'add-order': {
+        if (orderNumberDigitCount(state.newOrderDigits) !== 15) return;
+        state.data.activeOrders.push({
+          id: uid(), orderNumber: formatOrderNumber(state.newOrderDigits),
+          currentProcess: null, running: false, lastResumeAt: null, totals: {}
+        });
+        state.newOrderDigits = '';
+        await saveData();
+        render();
+        break;
+      }
+      case 'toggle-run': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        if (!order.currentProcess) { showToast('先に工程を選んでください'); return; }
+        if (order.running) {
+          flushOrder(order);
+          order.running = false;
+          order.lastResumeAt = null;
+        } else {
+          state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
+          order.running = true;
+          order.lastResumeAt = Date.now();
+        }
+        await saveData();
+        render();
+        break;
+      }
+      case 'select-process': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        const newProcess = t.dataset.process;
+        if (order.currentProcess === newProcess) return;
+        if (order.running) flushOrder(order);
+        order.currentProcess = newProcess;
+        if (order.running) order.lastResumeAt = Date.now();
+        await saveData();
+        render();
+        break;
+      }
+      case 'remove-order': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        if (order && orderTotalSeconds(order) > 0) {
+          if (!confirm('この受注番号にはすでに記録された時間があります。削除すると失われますがよろしいですか？')) return;
+        }
+        state.data.activeOrders = state.data.activeOrders.filter(o => o.id !== t.dataset.id);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-order': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        state.editingOrderId = order.id;
+        state.editOrderDigits = order.orderNumber.replace(/-/g, '');
+        render();
+        const inp = document.getElementById('edit-order-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-order': state.editingOrderId = null; render(); break;
+      case 'save-order-number': {
+        if (orderNumberDigitCount(state.editOrderDigits) !== 15) return;
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        order.orderNumber = formatOrderNumber(state.editOrderDigits);
+        state.editingOrderId = null;
+        await saveData();
+        render();
+        break;
+      }
+      case 'finalize': {
+        if (!confirm('本日の集計を履歴に保存し、時間をリセットします（受注番号のカードは残ります）。よろしいですか？')) return;
+        const date = todayStr();
+        state.data.activeOrders.forEach(o => {
+          if (o.running) flushOrder(o);
+          Object.entries(o.totals || {}).forEach(([process, seconds]) => {
+            if (seconds > 0) state.data.processLogs.push({ id: uid(), date, orderNumber: o.orderNumber, process, seconds, savedAt: Date.now() });
+          });
+          o.totals = {};
+          o.running = false;
+          o.lastResumeAt = null;
+          o.currentProcess = null;
+        });
+        await saveData();
+        showToast('集計を保存しました');
+        render();
+        break;
+      }
+      case 'toggle-process-date': {
+        const d = t.dataset.date;
+        state.processHistoryExpandedDate = state.processHistoryExpandedDate === d ? null : d;
+        render();
+        break;
+      }
+      case 'delete-process-date': {
+        if (!confirm(`${fmtDateJp(t.dataset.date)}の工程履歴をすべて削除します。よろしいですか？`)) return;
+        state.data.processLogs = state.data.processLogs.filter(l => l.date !== t.dataset.date);
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'delete-process-log': {
+        if (!confirm('この記録を削除します。よろしいですか？')) return;
+        state.data.processLogs = state.data.processLogs.filter(l => l.id !== t.dataset.id);
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'clear-all-process-logs': {
+        if (state.data.processLogs.length === 0) return;
+        if (!confirm('工程カウンターの履歴データをすべて削除します。元に戻せません。よろしいですか？')) return;
+        state.data.processLogs = [];
+        await saveData();
+        showToast('全履歴を削除しました');
+        render();
+        break;
+      }
+      case 'export-process-csv': {
+        const rows = [['日付','受注番号','工程','時間(h:mm)','時間(h)']];
+        state.data.processLogs
+          .slice()
+          .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
+          .forEach(l => rows.push([l.date, l.orderNumber, l.process, fmtHM(l.seconds), roundQuarter(l.seconds / 3600)]));
+        const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+        shareOrDownload('\uFEFF' + csv, `process-log-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
+        break;
+      }
+      case 'add-process-btn': {
+        const inp = document.getElementById('new-process-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.processes.push(name);
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-process': {
+        state.data.processes.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-process': {
+        const idx = parseInt(t.dataset.idx);
+        state.editingProcessIdx = idx;
+        state.editProcessName = state.data.processes[idx];
+        render();
+        const inp = document.getElementById('edit-process-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-process': state.editingProcessIdx = null; render(); break;
+      case 'save-process-name': {
+        const name = state.editProcessName.trim();
+        if (!name) return;
+        const idx = parseInt(t.dataset.idx);
+        state.data.processes[idx] = name;
+        state.editingProcessIdx = null;
+        await saveData();
+        render();
+        break;
+      }
+    }
   });
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.onclick = () => { state.mode = btn.dataset.mode; state.activeTab = 'record'; render(); };
-  });
 
-  const machineSelect = document.getElementById('machine-select');
-  if (machineSelect) machineSelect.onchange = (e) => {
-    state.selectedMachineId = e.target.value;
-    state.endDigits = '';
-    state.stopReason = '';
-    render();
-  };
-
-  const baseInput = document.getElementById('base-reading-input');
-  if (baseInput) {
-    baseInput.oninput = (e) => { state.endDigits = e.target.value.replace(/\D/g, '').slice(0, 9); render(); };
-    baseInput.focus();
-    baseInput.setSelectionRange(baseInput.value.length, baseInput.value.length);
-  }
-  const saveBaseBtn = document.getElementById('save-base-btn');
-  if (saveBaseBtn) saveBaseBtn.onclick = handleSaveBase;
-
-  const orderInput = document.getElementById('order-number-input');
-  if (orderInput) {
-    orderInput.oninput = async (e) => {
+  app.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.id === 'base-reading-input') {
+      state.endDigits = el.value.replace(/\D/g, '').slice(0, 9);
+      render();
+      const newEl = document.getElementById('base-reading-input');
+      if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'end-reading-input') {
+      state.endDigits = el.value.replace(/\D/g, '').slice(0, 9);
+      render();
+      const newEl = document.getElementById('end-reading-input');
+      if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'order-number-input') {
       const machine = getMachine(state.selectedMachineId);
-      const digits = e.target.value.replace(/\D/g, '').slice(0, 15);
+      const digits = el.value.replace(/\D/g, '').slice(0, 15);
       machine.pendingOrderDigits = digits;
       const formatted = formatOrderNumber(digits);
-      e.target.value = formatted;
+      el.value = formatted;
       const pos = formatted.length;
-      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
-      await saveData();
-      renderSaveButtonOnly();
-    };
-  }
-
-  const endInput = document.getElementById('end-reading-input');
-  if (endInput) {
-    endInput.oninput = (e) => { state.endDigits = e.target.value.replace(/\D/g, '').slice(0, 9); render(); };
-  }
-
-  const stopSelect = document.getElementById('stop-reason-select');
-  if (stopSelect) stopSelect.onchange = (e) => { state.stopReason = e.target.value; };
-
-  const saveCycleBtn = document.getElementById('save-cycle-btn');
-  if (saveCycleBtn) saveCycleBtn.onclick = handleSaveCycle;
-
-  const historyFilter = document.getElementById('history-filter');
-  if (historyFilter) historyFilter.onchange = (e) => { state.historyFilterMachine = e.target.value; render(); };
-
-  document.querySelectorAll('[data-action="toggle-date"]').forEach(el => {
-    el.onclick = () => {
-      const d = el.dataset.date;
-      state.expandedDate = state.expandedDate === d ? null : d;
-      render();
-    };
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      saveData();
+      const btn = document.getElementById('save-cycle-btn');
+      if (btn) btn.disabled = !(orderNumberDigitCount(machine.pendingOrderDigits) === 15 && digitsToMinutes(state.endDigits) !== null);
+    } else if (el.id === 'edit-machine-input') {
+      state.editMachineName = el.value;
+    } else if (el.id === 'edit-reason-input') {
+      state.editReasonName = el.value;
+    } else if (el.id === 'edit-process-input') {
+      state.editProcessName = el.value;
+    } else if (el.id === 'new-order-input') {
+      state.newOrderDigits = el.value.replace(/\D/g, '').slice(0, 15);
+      const formatted = formatOrderNumber(state.newOrderDigits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      const btn = document.getElementById('add-order-btn');
+      if (btn) btn.disabled = orderNumberDigitCount(state.newOrderDigits) !== 15;
+    } else if (el.id === 'edit-order-input') {
+      state.editOrderDigits = el.value.replace(/\D/g, '').slice(0, 15);
+      const formatted = formatOrderNumber(state.editOrderDigits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      const btn = app.querySelector('[data-action="save-order-number"]');
+      if (btn) btn.disabled = orderNumberDigitCount(state.editOrderDigits) !== 15;
+    }
   });
 
-  const exportBtn = document.getElementById('export-csv');
-  if (exportBtn) exportBtn.onclick = exportCsv;
-
-  const addMachineBtn = document.getElementById('add-machine');
-  if (addMachineBtn) addMachineBtn.onclick = async () => {
-    const inp = document.getElementById('new-machine-name');
-    const name = inp.value.trim();
-    if (!name) return;
-    state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' });
-    await saveData();
-    render();
-  };
-  document.querySelectorAll('[data-action="delete-machine"]').forEach(btn => {
-    btn.onclick = async () => {
-      state.data.machines = state.data.machines.filter(m => m.id !== btn.dataset.id);
-      if (state.selectedMachineId === btn.dataset.id) state.selectedMachineId = state.data.machines[0]?.id || null;
-      await saveData();
+  app.addEventListener('change', async (e) => {
+    const el = e.target;
+    if (el.id === 'machine-select') {
+      state.selectedMachineId = el.value;
+      state.endDigits = '';
+      state.stopReason = '';
       render();
-    };
-  });
-  document.querySelectorAll('[data-action="edit-machine"]').forEach(btn => {
-    btn.onclick = () => {
-      const m = getMachine(btn.dataset.id);
-      state.editingMachineId = m.id;
-      state.editMachineName = m.name;
+    } else if (el.id === 'stop-reason-select') {
+      state.stopReason = el.value;
+    } else if (el.id === 'history-filter') {
+      state.historyFilterMachine = el.value;
       render();
-      const inp = document.getElementById('edit-machine-input');
-      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    };
-  });
-  const cancelEditMachine = document.querySelector('[data-action="cancel-edit-machine"]');
-  if (cancelEditMachine) cancelEditMachine.onclick = () => { state.editingMachineId = null; render(); };
-  const editMachineInput = document.getElementById('edit-machine-input');
-  if (editMachineInput) editMachineInput.oninput = (e) => { state.editMachineName = e.target.value; };
-  document.querySelectorAll('[data-action="save-machine-name"]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = state.editMachineName.trim();
-      if (!name) return;
-      const m = getMachine(btn.dataset.id);
-      m.name = name;
-      state.editingMachineId = null;
-      await saveData();
-      render();
-    };
-  });
-
-  const addReasonBtn = document.getElementById('add-reason');
-  if (addReasonBtn) addReasonBtn.onclick = async () => {
-    const inp = document.getElementById('new-reason-name');
-    const name = inp.value.trim();
-    if (!name) return;
-    state.data.stopReasons.push(name);
-    await saveData();
-    render();
-  };
-  document.querySelectorAll('[data-action="delete-reason"]').forEach(btn => {
-    btn.onclick = async () => {
-      state.data.stopReasons.splice(parseInt(btn.dataset.idx), 1);
-      await saveData();
-      render();
-    };
-  });
-  document.querySelectorAll('[data-action="edit-reason"]').forEach(btn => {
-    btn.onclick = () => {
-      const idx = parseInt(btn.dataset.idx);
-      state.editingReasonIdx = idx;
-      state.editReasonName = state.data.stopReasons[idx];
-      render();
-      const inp = document.getElementById('edit-reason-input');
-      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    };
-  });
-  const cancelEditReason = document.querySelector('[data-action="cancel-edit-reason"]');
-  if (cancelEditReason) cancelEditReason.onclick = () => { state.editingReasonIdx = null; render(); };
-  const editReasonInput = document.getElementById('edit-reason-input');
-  if (editReasonInput) editReasonInput.oninput = (e) => { state.editReasonName = e.target.value; };
-  document.querySelectorAll('[data-action="save-reason-name"]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = state.editReasonName.trim();
-      if (!name) return;
-      const idx = parseInt(btn.dataset.idx);
-      state.data.stopReasons[idx] = name;
-      state.editingReasonIdx = null;
-      await saveData();
-      render();
-    };
-  });
-
-  const exportBackupBtn = document.getElementById('export-backup');
-  if (exportBackupBtn) exportBackupBtn.onclick = () => {
-    shareOrDownload(JSON.stringify(state.data, null, 2), `machine-log-backup-${todayStr()}.json`, 'application/json');
-  };
-  const importBackupBtn = document.getElementById('import-backup');
-  const importFileInput = document.getElementById('import-file-input');
-  if (importBackupBtn && importFileInput) {
-    importBackupBtn.onclick = () => importFileInput.click();
-    importFileInput.onchange = async (e) => {
-      const file = e.target.files[0];
+    } else if (el.id === 'import-file-input') {
+      const file = el.files[0];
       if (!file) return;
       const text = await file.text();
       try {
@@ -1038,198 +1220,8 @@ function attachHandlers() {
       } catch (err) {
         alert('読み込みに失敗しました: ' + err.message);
       }
-      importFileInput.value = '';
-    };
-  }
-
-  // ---------- process counter (工程カウンター) ----------
-  const newOrderInput = document.getElementById('new-order-input');
-  if (newOrderInput) {
-    newOrderInput.oninput = (e) => {
-      state.newOrderDigits = e.target.value.replace(/\D/g, '').slice(0, 15);
-      const formatted = formatOrderNumber(state.newOrderDigits);
-      e.target.value = formatted;
-      const pos = formatted.length;
-      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
-      const btn = document.getElementById('add-order-btn');
-      if (btn) btn.disabled = orderNumberDigitCount(state.newOrderDigits) !== 15;
-    };
-  }
-  const addOrderBtn = document.getElementById('add-order-btn');
-  if (addOrderBtn) addOrderBtn.onclick = async () => {
-    if (orderNumberDigitCount(state.newOrderDigits) !== 15) return;
-    state.data.activeOrders.push({
-      id: uid(),
-      orderNumber: formatOrderNumber(state.newOrderDigits),
-      currentProcess: null,
-      running: false,
-      lastResumeAt: null,
-      totals: {}
-    });
-    state.newOrderDigits = '';
-    await saveData();
-    render();
-  };
-
-  document.querySelectorAll('[data-action="toggle-run"]').forEach(btn => {
-    btn.onclick = async () => {
-      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
-      if (!order.currentProcess) { showToast('先に工程を選んでください'); return; }
-      if (order.running) {
-        flushOrder(order);
-        order.running = false;
-        order.lastResumeAt = null;
-      } else {
-        // pause any other running order first
-        state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
-        order.running = true;
-        order.lastResumeAt = Date.now();
-      }
-      await saveData();
-      render();
-    };
-  });
-
-  document.querySelectorAll('[data-action="select-process"]').forEach(btn => {
-    btn.onclick = async () => {
-      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
-      const newProcess = btn.dataset.process;
-      if (order.currentProcess === newProcess) return;
-      if (order.running) flushOrder(order);
-      order.currentProcess = newProcess;
-      if (order.running) order.lastResumeAt = Date.now();
-      await saveData();
-      render();
-    };
-  });
-
-  document.querySelectorAll('[data-action="remove-order"]').forEach(btn => {
-    btn.onclick = async () => {
-      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
-      if (order && orderTotalSeconds(order) > 0) {
-        if (!confirm('この受注番号にはすでに記録された時間があります。削除すると失われますがよろしいですか？')) return;
-      }
-      state.data.activeOrders = state.data.activeOrders.filter(o => o.id !== btn.dataset.id);
-      await saveData();
-      render();
-    };
-  });
-
-  document.querySelectorAll('[data-action="edit-order"]').forEach(btn => {
-    btn.onclick = () => {
-      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
-      state.editingOrderId = order.id;
-      state.editOrderDigits = order.orderNumber.replace(/-/g, '');
-      render();
-      const inp = document.getElementById('edit-order-input');
-      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    };
-  });
-  const editOrderInput = document.getElementById('edit-order-input');
-  if (editOrderInput) {
-    editOrderInput.oninput = (e) => {
-      state.editOrderDigits = e.target.value.replace(/\D/g, '').slice(0, 15);
-      const formatted = formatOrderNumber(state.editOrderDigits);
-      e.target.value = formatted;
-      const pos = formatted.length;
-      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
-      const btn = document.querySelector('[data-action="save-order-number"]');
-      if (btn) btn.disabled = orderNumberDigitCount(state.editOrderDigits) !== 15;
-    };
-  }
-  const cancelEditOrder = document.querySelector('[data-action="cancel-edit-order"]');
-  if (cancelEditOrder) cancelEditOrder.onclick = () => { state.editingOrderId = null; render(); };
-  document.querySelectorAll('[data-action="save-order-number"]').forEach(btn => {
-    btn.onclick = async () => {
-      if (orderNumberDigitCount(state.editOrderDigits) !== 15) return;
-      const order = state.data.activeOrders.find(o => o.id === btn.dataset.id);
-      order.orderNumber = formatOrderNumber(state.editOrderDigits);
-      state.editingOrderId = null;
-      await saveData();
-      render();
-    };
-  });
-
-  const finalizeBtn = document.getElementById('finalize-btn');
-  if (finalizeBtn) finalizeBtn.onclick = async () => {
-    if (!confirm('本日の集計を履歴に保存し、時間をリセットします（受注番号のカードは残ります）。よろしいですか？')) return;
-    const date = todayStr();
-    state.data.activeOrders.forEach(o => {
-      if (o.running) flushOrder(o);
-      Object.entries(o.totals || {}).forEach(([process, seconds]) => {
-        if (seconds > 0) {
-          state.data.processLogs.push({ id: uid(), date, orderNumber: o.orderNumber, process, seconds, savedAt: Date.now() });
-        }
-      });
-      o.totals = {};
-      o.running = false;
-      o.lastResumeAt = null;
-      o.currentProcess = null;
-    });
-    await saveData();
-    showToast('集計を保存しました');
-    render();
-  };
-
-  document.querySelectorAll('[data-action="toggle-process-date"]').forEach(el => {
-    el.onclick = () => {
-      const d = el.dataset.date;
-      state.processHistoryExpandedDate = state.processHistoryExpandedDate === d ? null : d;
-      render();
-    };
-  });
-
-  const exportProcessCsvBtn = document.getElementById('export-process-csv');
-  if (exportProcessCsvBtn) exportProcessCsvBtn.onclick = () => {
-    const rows = [['日付','受注番号','工程','時間(h:mm)','時間(h)']];
-    state.data.processLogs
-      .slice()
-      .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
-      .forEach(l => rows.push([l.date, l.orderNumber, l.process, fmtHM(l.seconds), roundQuarter(l.seconds / 3600)]));
-    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
-    shareOrDownload('\uFEFF' + csv, `process-log-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
-  };
-
-  const addProcessBtn = document.getElementById('add-process');
-  if (addProcessBtn) addProcessBtn.onclick = async () => {
-    const inp = document.getElementById('new-process-name');
-    const name = inp.value.trim();
-    if (!name) return;
-    state.data.processes.push(name);
-    await saveData();
-    render();
-  };
-  document.querySelectorAll('[data-action="delete-process"]').forEach(btn => {
-    btn.onclick = async () => {
-      state.data.processes.splice(parseInt(btn.dataset.idx), 1);
-      await saveData();
-      render();
-    };
-  });
-  document.querySelectorAll('[data-action="edit-process"]').forEach(btn => {
-    btn.onclick = () => {
-      const idx = parseInt(btn.dataset.idx);
-      state.editingProcessIdx = idx;
-      state.editProcessName = state.data.processes[idx];
-      render();
-      const inp = document.getElementById('edit-process-input');
-      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
-    };
-  });
-  const cancelEditProcess = document.querySelector('[data-action="cancel-edit-process"]');
-  if (cancelEditProcess) cancelEditProcess.onclick = () => { state.editingProcessIdx = null; render(); };
-  const editProcessInput = document.getElementById('edit-process-input');
-  if (editProcessInput) editProcessInput.oninput = (e) => { state.editProcessName = e.target.value; };
-  document.querySelectorAll('[data-action="save-process-name"]').forEach(btn => {
-    btn.onclick = async () => {
-      const name = state.editProcessName.trim();
-      if (!name) return;
-      const idx = parseInt(btn.dataset.idx);
-      state.data.processes[idx] = name;
-      state.editingProcessIdx = null;
-      await saveData();
-      render();
-    };
+      el.value = '';
+    }
   });
 }
 
@@ -1256,15 +1248,6 @@ setInterval(() => {
     }
   });
 }, 1000);
-
-// lightweight refresh of just the save button's disabled state, to avoid losing focus while typing order number
-function renderSaveButtonOnly() {
-  const machine = getMachine(state.selectedMachineId);
-  const endMinutes = digitsToMinutes(state.endDigits);
-  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
-  const btn = document.getElementById('save-cycle-btn');
-  if (btn) btn.disabled = !(orderComplete && endMinutes !== null);
-}
 
 async function handleSaveBase() {
   const machine = getMachine(state.selectedMachineId);
@@ -1327,6 +1310,7 @@ function exportCsv() {
 }
 
 (async function init() {
+  bindDelegatedHandlers();
   await loadData();
   render();
 })();
