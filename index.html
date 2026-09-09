@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.0</title>
+<title>稼働ログ v1.1</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -272,7 +272,11 @@ let state = {
   endDigits: '',
   stopReason: '',
   historyFilterMachine: 'all',
-  expandedDate: null
+  expandedDate: null,
+  editingMachineId: null,
+  editMachineName: '',
+  editingReasonIdx: null,
+  editReasonName: ''
 };
 
 async function loadData() {
@@ -320,7 +324,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.0</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.1</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.activeTab === 'record' ? renderRecordTab() : ''}
     ${state.activeTab === 'history' ? renderHistoryTab() : ''}
@@ -464,12 +468,7 @@ function renderMasterTab() {
   return `
     <div class="panel">
       <h2>機械一覧</h2>
-      ${state.data.machines.map(m => `
-        <div class="master-item">
-          <span>${escapeHtml(m.name)}</span>
-          <button class="btn-danger" data-action="delete-machine" data-id="${m.id}">削除</button>
-        </div>
-      `).join('') || '<div class="empty">登録なし</div>'}
+      ${state.data.machines.map(m => renderMachineRow(m)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="new-machine-name" placeholder="新しい機械名">
         <button class="btn" id="add-machine" style="flex:0 0 auto;">追加</button>
@@ -477,12 +476,7 @@ function renderMasterTab() {
     </div>
     <div class="panel">
       <h2>停止理由一覧</h2>
-      ${state.data.stopReasons.map((r, idx) => `
-        <div class="master-item">
-          <span>${escapeHtml(r)}</span>
-          <button class="btn-danger" data-action="delete-reason" data-idx="${idx}">削除</button>
-        </div>
-      `).join('') || '<div class="empty">登録なし</div>'}
+      ${state.data.stopReasons.map((r, idx) => renderReasonRow(r, idx)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
         <input type="text" id="new-reason-name" placeholder="新しい停止理由">
         <button class="btn" id="add-reason" style="flex:0 0 auto;">追加</button>
@@ -496,6 +490,44 @@ function renderMasterTab() {
         <button class="btn" id="import-backup">復元（読み込み）</button>
       </div>
       <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+    </div>
+  `;
+}
+
+function renderMachineRow(m) {
+  if (state.editingMachineId === m.id) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-machine-input" value="${escapeHtml(state.editMachineName)}" style="flex:1;">
+        <button class="btn" data-action="save-machine-name" data-id="${m.id}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-machine" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(m.name)}</span>
+      <button class="btn" data-action="edit-machine" data-id="${m.id}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-machine" data-id="${m.id}">削除</button>
+    </div>
+  `;
+}
+
+function renderReasonRow(r, idx) {
+  if (state.editingReasonIdx === idx) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-reason-input" value="${escapeHtml(state.editReasonName)}" style="flex:1;">
+        <button class="btn" data-action="save-reason-name" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-reason" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(r)}</span>
+      <button class="btn" data-action="edit-reason" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-reason" data-idx="${idx}">削除</button>
     </div>
   `;
 }
@@ -583,6 +615,31 @@ function attachHandlers() {
       render();
     };
   });
+  document.querySelectorAll('[data-action="edit-machine"]').forEach(btn => {
+    btn.onclick = () => {
+      const m = getMachine(btn.dataset.id);
+      state.editingMachineId = m.id;
+      state.editMachineName = m.name;
+      render();
+      const inp = document.getElementById('edit-machine-input');
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    };
+  });
+  const cancelEditMachine = document.querySelector('[data-action="cancel-edit-machine"]');
+  if (cancelEditMachine) cancelEditMachine.onclick = () => { state.editingMachineId = null; render(); };
+  const editMachineInput = document.getElementById('edit-machine-input');
+  if (editMachineInput) editMachineInput.oninput = (e) => { state.editMachineName = e.target.value; };
+  document.querySelectorAll('[data-action="save-machine-name"]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = state.editMachineName.trim();
+      if (!name) return;
+      const m = getMachine(btn.dataset.id);
+      m.name = name;
+      state.editingMachineId = null;
+      await saveData();
+      render();
+    };
+  });
 
   const addReasonBtn = document.getElementById('add-reason');
   if (addReasonBtn) addReasonBtn.onclick = async () => {
@@ -596,6 +653,31 @@ function attachHandlers() {
   document.querySelectorAll('[data-action="delete-reason"]').forEach(btn => {
     btn.onclick = async () => {
       state.data.stopReasons.splice(parseInt(btn.dataset.idx), 1);
+      await saveData();
+      render();
+    };
+  });
+  document.querySelectorAll('[data-action="edit-reason"]').forEach(btn => {
+    btn.onclick = () => {
+      const idx = parseInt(btn.dataset.idx);
+      state.editingReasonIdx = idx;
+      state.editReasonName = state.data.stopReasons[idx];
+      render();
+      const inp = document.getElementById('edit-reason-input');
+      if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+    };
+  });
+  const cancelEditReason = document.querySelector('[data-action="cancel-edit-reason"]');
+  if (cancelEditReason) cancelEditReason.onclick = () => { state.editingReasonIdx = null; render(); };
+  const editReasonInput = document.getElementById('edit-reason-input');
+  if (editReasonInput) editReasonInput.oninput = (e) => { state.editReasonName = e.target.value; };
+  document.querySelectorAll('[data-action="save-reason-name"]').forEach(btn => {
+    btn.onclick = async () => {
+      const name = state.editReasonName.trim();
+      if (!name) return;
+      const idx = parseInt(btn.dataset.idx);
+      state.data.stopReasons[idx] = name;
+      state.editingReasonIdx = null;
       await saveData();
       render();
     };
