@@ -44,6 +44,7 @@
     font-size: 0.78rem;
     color: var(--muted);
     margin-bottom: 14px;
+    overflow-wrap: anywhere;
   }
   h2 {
     font-size: 0.95rem;
@@ -58,16 +59,14 @@
     padding: 14px;
     margin-bottom: 14px;
   }
-  .panel.base {
-    border-color: var(--cyan-dim);
-  }
+  .panel.base { border-color: var(--cyan-dim); }
   label {
     display: block;
     font-size: 0.78rem;
     color: var(--muted);
     margin-bottom: 6px;
   }
-  select, input[type=text], input[type=number], input[type=tel], input[type=date] {
+  select, input[type=text], input[type=number], input[type=tel] {
     width: 100%;
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -80,12 +79,9 @@
   select:focus, input:focus { border-color: var(--cyan); }
   .row { display: flex; gap: 8px; align-items: center; }
   .row > * { flex: 1; }
-  .field { margin-bottom: 12px; }
-  button {
-    font-family: inherit;
-    border: none;
-    cursor: pointer;
-  }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  button { font-family: inherit; border: none; cursor: pointer; }
   .btn {
     background: var(--panel-2);
     color: var(--cyan);
@@ -123,60 +119,31 @@
     display: flex;
     justify-content: space-between;
     align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 10px;
     padding: 6px 0;
     font-size: 0.85rem;
     color: var(--muted);
+    min-width: 0;
   }
+  .stat span, .stat b { overflow-wrap: anywhere; min-width: 0; }
   .stat b { color: var(--text); font-size: 0.95rem; }
-  .elapsed-display {
-    text-align: center;
-    padding: 10px 0 4px;
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 14px 0;
   }
-  .elapsed-display .num {
-    font-size: 2.2rem;
+  .step-label {
+    font-size: 0.7rem;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
     font-weight: 700;
-    color: var(--cyan);
-    line-height: 1;
+    margin-bottom: 6px;
   }
-  .elapsed-display .label {
-    font-size: 0.75rem;
-    color: var(--muted);
-    margin-top: 4px;
-  }
-  .item-card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 10px;
-    margin-bottom: 8px;
-  }
-  .item-card.stop { border-color: var(--red-dim); }
-  .item-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .tag {
-    font-size: 0.68rem;
-    padding: 2px 7px;
-    border-radius: 20px;
-    background: var(--cyan-dim);
-    color: var(--cyan);
-    font-weight: 600;
-  }
-  .tag.stop { background: var(--red-dim); color: var(--red); }
-  .add-row { display: flex; gap: 8px; margin-bottom: 4px; }
-  .balance-bar {
-    height: 6px;
-    background: var(--panel-2);
-    border-radius: 3px;
-    overflow: hidden;
-    margin: 8px 0 4px;
-  }
-  .balance-fill { height: 100%; background: var(--cyan); transition: width .2s; }
-  .balance-fill.over { background: var(--red); }
-  .balance-text { font-size: 0.78rem; color: var(--muted); text-align: center; }
+  .elapsed-display { text-align: center; padding: 10px 0 4px; }
+  .elapsed-display .num { font-size: 2.2rem; font-weight: 700; color: var(--cyan); line-height: 1; }
+  .elapsed-display .label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
   .tabbar {
     position: fixed;
     bottom: 0; left: 0; right: 0;
@@ -187,55 +154,42 @@
     padding: 8px 0 max(8px, env(safe-area-inset-bottom));
   }
   .tab-btn {
-    flex: 1;
-    background: none;
-    color: var(--muted);
-    font-size: 0.72rem;
-    padding: 4px 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 3px;
+    flex: 1; background: none; color: var(--muted);
+    font-size: 0.72rem; padding: 4px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
   }
   .tab-btn.active { color: var(--cyan); }
-  .tab-btn .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: currentColor; opacity: 0.9;
+  .tab-btn .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.9; }
+  .empty { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 24px 8px; }
+  .date-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 4px; border-bottom: 1px solid var(--border);
   }
-  .empty {
-    text-align: center;
-    color: var(--muted);
-    font-size: 0.85rem;
-    padding: 24px 8px;
-  }
-  .log-entry {
-    border-bottom: 1px solid var(--border);
-    padding: 10px 0;
-  }
+  .date-row:last-child { border-bottom: none; }
+  .date-row .d-label { font-size: 0.95rem; font-weight: 600; }
+  .date-row .d-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  .date-row .chev { color: var(--muted); font-size: 0.8rem; }
+  .date-detail { padding: 4px 4px 10px; }
+  .log-entry { border-bottom: 1px solid var(--border); padding: 10px 0; }
   .log-entry:last-child { border-bottom: none; }
-  .log-entry-head {
-    display: flex; justify-content: space-between;
-    font-size: 0.85rem; margin-bottom: 4px;
-  }
-  .log-entry-head .date { color: var(--text); font-weight: 600; }
+  .log-entry-head { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px; }
   .log-entry-head .machine { color: var(--muted); }
-  .log-entry-sub {
-    font-size: 0.78rem; color: var(--muted);
-    display: flex; justify-content: space-between; margin-top: 2px;
+  .log-entry-order { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+  .log-entry-sub { font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; margin-top: 2px; }
+  .stop-chip {
+    display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 20px;
+    background: var(--red-dim); color: var(--red); margin-top: 4px;
   }
   .filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
-  .master-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 8px 0; border-bottom: 1px solid var(--border);
-  }
+  .master-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
   .master-item:last-child { border-bottom: none; }
   .master-item span { flex: 1; font-size: 0.9rem; }
+  .add-row { display: flex; gap: 8px; margin-bottom: 4px; }
   .toast {
     position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%);
     background: var(--cyan); color: #04202a; font-weight: 700;
     padding: 9px 18px; border-radius: 20px; font-size: 0.85rem;
-    opacity: 0; pointer-events: none; transition: opacity .25s;
-    white-space: nowrap;
+    opacity: 0; pointer-events: none; transition: opacity .25s; white-space: nowrap;
   }
   .toast.show { opacity: 1; }
 </style>
@@ -261,7 +215,7 @@ const storage = {
     try { localStorage.setItem(key, value); } catch (e) {}
   }
 };
-const DATA_KEY = 'machine-log-data-v2';
+const DATA_KEY = 'machine-log-data-v3';
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
@@ -273,16 +227,16 @@ function fmtDateJp(dstr) {
 function roundQuarter(x) { return Math.round(x * 4) / 4; }
 function fmtHours(x) { return (Math.round(x * 100) / 100).toString(); }
 
-// ---------- counter reading: raw digits -> "H:MM" display, last 2 digits = minutes ----------
+// ---------- counter reading: raw digits -> "H:MM", last 2 digits = minutes ----------
 function digitsToMinutes(digits) {
-  const clean = digits.replace(/\D/g, '');
+  const clean = (digits || '').replace(/\D/g, '');
   if (clean.length === 0) return null;
   const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
   const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
   return parseInt(hoursPart, 10) * 60 + parseInt(minutesPart, 10);
 }
 function digitsToDisplay(digits) {
-  const clean = digits.replace(/\D/g, '');
+  const clean = (digits || '').replace(/\D/g, '');
   if (clean.length === 0) return '';
   const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
   const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
@@ -295,9 +249,9 @@ function minutesToDisplay(totalMin) {
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
-// ---------- order number formatting: 00-00000-000-00-000 (2-5-3-2-3 digits) ----------
+// ---------- order number: 00-00000-000-00-000 (2-5-3-2-3 digits) ----------
 function formatOrderNumber(raw) {
-  const digits = raw.replace(/\D/g, '').slice(0, 15);
+  const digits = (raw || '').replace(/\D/g, '').slice(0, 15);
   const parts = [digits.slice(0,2), digits.slice(2,7), digits.slice(7,10), digits.slice(10,12), digits.slice(12,15)];
   return parts.filter(p => p.length > 0).join('-');
 }
@@ -305,7 +259,7 @@ function orderNumberDigitCount(v) { return (v || '').replace(/-/g, '').length; }
 
 function defaultData() {
   return {
-    machines: [{ id: uid(), name: 'マシニング1号機', lastReadingMinutes: null, lastReadingDigits: '', lastDate: null }],
+    machines: [{ id: uid(), name: 'マシニング1号機', lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' }],
     stopReasons: ['段取り替え', '工具交換', 'チョコ停', '材料待ち', '計画停止', 'その他'],
     logs: []
   };
@@ -315,8 +269,10 @@ let state = {
   data: null,
   activeTab: 'record',
   selectedMachineId: null,
-  entry: { digits: '', date: todayStr(), items: [] },
-  historyFilterMachine: 'all'
+  endDigits: '',
+  stopReason: '',
+  historyFilterMachine: 'all',
+  expandedDate: null
 };
 
 async function loadData() {
@@ -330,9 +286,7 @@ async function loadData() {
     state.selectedMachineId = state.data.machines[0].id;
   }
 }
-async function saveData() {
-  await storage.set(DATA_KEY, JSON.stringify(state.data));
-}
+async function saveData() { await storage.set(DATA_KEY, JSON.stringify(state.data)); }
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -341,7 +295,6 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 1600);
 }
 
-// ---------- render ----------
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
@@ -358,13 +311,9 @@ function render() {
   `;
   attachHandlers();
 }
-
 function tabBtn(id, label) {
-  return `<button class="tab-btn ${state.activeTab === id ? 'active' : ''}" data-tab="${id}">
-    <span class="dot"></span>${label}
-  </button>`;
+  return `<button class="tab-btn ${state.activeTab === id ? 'active' : ''}" data-tab="${id}"><span class="dot"></span>${label}</button>`;
 }
-
 function getMachine(id) { return state.data.machines.find(m => m.id === id); }
 
 function renderRecordTab() {
@@ -374,102 +323,75 @@ function renderRecordTab() {
   }
   const machine = getMachine(state.selectedMachineId) || machines[0];
   const hasPrev = machine.lastReadingMinutes !== null && machine.lastReadingMinutes !== undefined;
-  const currentMinutes = digitsToMinutes(state.entry.digits);
-  const rawElapsedMin = (hasPrev && currentMinutes !== null) ? (currentMinutes - machine.lastReadingMinutes) : null;
-  const elapsed = rawElapsedMin !== null ? roundQuarter(Math.max(0, rawElapsedMin) / 60) : null;
 
-  const allocated = state.entry.items.reduce((s, it) => s + (parseFloat(it.hours) || 0), 0);
-  const remaining = elapsed !== null ? roundQuarter(elapsed - allocated) : null;
-  const canSave = elapsed !== null && Math.abs(remaining) < 0.001 && state.entry.items.length > 0
-    && state.entry.items.every(it => it.type === 'stop' || orderNumberDigitCount(it.orderNumber) === 15);
-
-  return `
+  const machinePanel = `
     <div class="panel">
       <label>機械</label>
       <select id="machine-select">
         ${machines.map(m => `<option value="${m.id}" ${m.id === machine.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
       </select>
-      <div class="stat"><span>現在の基準（開始）</span><b>${hasPrev ? escapeHtml(fmtDateJp(machine.lastDate)) + '　' + minutesToDisplay(machine.lastReadingMinutes) : '記録なし（初回）'}</b></div>
     </div>
-
-    <div class="panel ${!hasPrev ? 'base' : ''}">
-      <label>${hasPrev ? '終了時のカウンター値' : '基準となるカウンター値'}（機械の表示のまま入力）</label>
-      <input type="tel" inputmode="numeric" id="reading-input" placeholder="例：123456:12 と表示なら「12345612」と入力" value="${digitsToDisplay(state.entry.digits)}">
-      <div class="field" style="margin-top:10px; margin-bottom:0;">
-        <label>この記録の日付（自動で日付は変わりません。必要なら変更してください）</label>
-        <input type="date" id="entry-date" value="${state.entry.date}">
-      </div>
-      ${hasPrev && elapsed !== null ? `
-        <div class="elapsed-display">
-          <div class="num">${fmtHours(elapsed)} h</div>
-          <div class="label">経過時間（0.25h単位に丸め／カウンター値自体は丸めません）</div>
-        </div>
-      ` : ''}
-    </div>
-
-    ${hasPrev && elapsed !== null && elapsed > 0 ? `
-      <div class="panel">
-        <div class="item-head"><h2 style="margin:0;">内訳（受注番号・停止理由に配分）</h2></div>
-        ${state.entry.items.map((it, idx) => renderItemCard(it, idx)).join('') || '<div class="empty" style="padding:12px;">受注番号または停止理由を追加してください</div>'}
-        <div class="add-row">
-          <button class="btn" data-action="add-order">＋ 受注番号を追加</button>
-          <button class="btn" data-action="add-stop">＋ 停止理由を追加</button>
-        </div>
-        <div class="balance-bar"><div class="balance-fill ${remaining < 0 ? 'over' : ''}" style="width:${Math.min(100, Math.max(0, (allocated/Math.max(elapsed,0.01))*100))}%"></div></div>
-        <div class="balance-text">
-          ${remaining === 0 ? '配分完了 ✓' : remaining > 0 ? `残り ${fmtHours(remaining)} h 未割り当て` : `${fmtHours(Math.abs(remaining))} h 超過しています`}
-        </div>
-      </div>
-    ` : ''}
-
-    <button class="btn-primary" id="save-btn" ${(!hasPrev ? currentMinutes === null : !canSave) ? 'disabled' : ''}>
-      ${hasPrev ? 'この記録を保存' : '基準として保存'}
-    </button>
   `;
-}
 
-function renderItemCard(it, idx) {
-  if (it.type === 'order') {
-    return `
-      <div class="item-card">
-        <div class="item-head">
-          <span class="tag">受注番号</span>
-          <button class="btn-danger" data-action="remove-item" data-idx="${idx}">削除</button>
-        </div>
-        <div class="row" style="margin-bottom:8px;">
-          <input type="tel" inputmode="numeric" placeholder="00-00000-000-00-000" value="${it.orderNumber || ''}" data-action="order-number" data-idx="${idx}">
-        </div>
-        <div class="row">
-          <label style="flex:0 0 auto; margin:0; align-self:center; color:var(--muted); font-size:0.8rem;">時間(h)</label>
-          <input type="number" step="0.25" min="0.25" inputmode="decimal" value="${it.hours}" data-action="item-hours" data-idx="${idx}">
-        </div>
+  if (!hasPrev) {
+    const currentMinutes = digitsToMinutes(state.endDigits);
+    return machinePanel + `
+      <div class="panel base">
+        <div class="step-label">初回登録</div>
+        <label>基準となるカウンター値（機械の表示のまま）</label>
+        <input type="tel" inputmode="numeric" id="base-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
       </div>
+      <button class="btn-primary" id="save-base-btn" ${currentMinutes === null ? 'disabled' : ''}>基準として保存</button>
     `;
   }
-  return `
-    <div class="item-card stop">
-      <div class="item-head">
-        <span class="tag stop">停止</span>
-        <button class="btn-danger" data-action="remove-item" data-idx="${idx}">削除</button>
-      </div>
-      <div class="row" style="margin-bottom:8px;">
-        <select data-action="stop-reason" data-idx="${idx}">
-          ${state.data.stopReasons.map(r => `<option value="${escapeHtml(r)}" ${it.reason === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
-        </select>
-      </div>
-      <div class="row">
-        <label style="flex:0 0 auto; margin:0; align-self:center; color:var(--muted); font-size:0.8rem;">時間(h)</label>
-        <input type="number" step="0.25" min="0.25" inputmode="decimal" value="${it.hours}" data-action="item-hours" data-idx="${idx}">
+
+  const endMinutes = digitsToMinutes(state.endDigits);
+  const elapsed = endMinutes !== null ? roundQuarter(Math.max(0, endMinutes - machine.lastReadingMinutes) / 60) : null;
+  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
+  const canSave = orderComplete && endMinutes !== null;
+
+  return machinePanel + `
+    <div class="panel">
+      <div class="step-label">開始</div>
+      <div class="stat"><span>${escapeHtml(fmtDateJp(machine.lastDate))}</span><b>${minutesToDisplay(machine.lastReadingMinutes)}</b></div>
+      <div class="field" style="margin-top:10px;">
+        <label>受注番号</label>
+        <input type="tel" inputmode="numeric" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
       </div>
     </div>
+
+    <div class="panel">
+      <div class="step-label">終了</div>
+      <div class="field">
+        <label>終了時のカウンター値</label>
+        <input type="tel" inputmode="numeric" id="end-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
+      </div>
+      ${elapsed !== null ? `
+        <div class="elapsed-display">
+          <div class="num">${fmtHours(elapsed)} h</div>
+          <div class="label">経過時間（0.25h単位に丸め）</div>
+        </div>
+      ` : ''}
+      <div class="field">
+        <label>停止理由（あれば選択・任意）</label>
+        <select id="stop-reason-select">
+          <option value="" ${state.stopReason === '' ? 'selected' : ''}>なし</option>
+          ${state.data.stopReasons.map(r => `<option value="${escapeHtml(r)}" ${state.stopReason === r ? 'selected' : ''}>${escapeHtml(r)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="save-cycle-btn" ${canSave ? '' : 'disabled'}>この記録を保存</button>
+    ${!orderComplete && machine.pendingOrderDigits ? `<div class="stat" style="justify-content:center; margin-top:8px;">受注番号は15桁必要です</div>` : ''}
   `;
 }
 
 function renderHistoryTab() {
   const machines = state.data.machines;
-  const logs = [...state.data.logs]
-    .filter(l => state.historyFilterMachine === 'all' || l.machineId === state.historyFilterMachine)
-    .sort((a, b) => b.date.localeCompare(a.date) || b.savedAt - a.savedAt);
+  const filtered = state.data.logs.filter(l => state.historyFilterMachine === 'all' || l.machineId === state.historyFilterMachine);
+  const byDate = {};
+  filtered.forEach(l => { (byDate[l.date] = byDate[l.date] || []).push(l); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
 
   return `
     <div class="filter-row">
@@ -480,24 +402,38 @@ function renderHistoryTab() {
       <button class="btn" id="export-csv">CSV書き出し</button>
     </div>
     <div class="panel">
-      ${logs.length === 0 ? '<div class="empty">記録がまだありません</div>' : logs.map(l => renderLogEntry(l)).join('')}
+      ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderDateRow(d, byDate[d])).join('')}
+    </div>
+  `;
+}
+
+function renderDateRow(date, logs) {
+  const total = logs.reduce((s, l) => s + l.elapsedHours, 0);
+  const expanded = state.expandedDate === date;
+  return `
+    <div>
+      <div class="date-row" data-action="toggle-date" data-date="${date}">
+        <div>
+          <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
+          <div class="d-sub">${logs.length}件 / 合計 ${fmtHours(total)}h</div>
+        </div>
+        <div class="chev">${expanded ? '▲' : '▼'}</div>
+      </div>
+      ${expanded ? `<div class="date-detail">${logs.map(renderLogEntry).join('')}</div>` : ''}
     </div>
   `;
 }
 
 function renderLogEntry(l) {
   const machine = getMachine(l.machineId);
-  const details = l.entries.map(e => e.type === 'order'
-    ? `${e.orderNumber} ${fmtHours(e.hours)}h`
-    : `⛔${e.reason} ${fmtHours(e.hours)}h`).join(' / ');
   return `
     <div class="log-entry">
       <div class="log-entry-head">
-        <span class="date">${escapeHtml(fmtDateJp(l.date))}</span>
+        <span class="log-entry-order">${escapeHtml(l.orderNumber)}</span>
         <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
       </div>
       <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
-      <div class="log-entry-sub" style="margin-top:4px;">${escapeHtml(details) || '（基準値記録）'}</div>
+      ${l.stopReason ? `<div class="stop-chip">⛔ ${escapeHtml(l.stopReason)}</div>` : ''}
     </div>
   `;
 }
@@ -532,9 +468,7 @@ function renderMasterTab() {
     </div>
     <div class="panel">
       <h2>バックアップ</h2>
-      <div class="balance-text" style="margin-bottom:10px; text-align:left;">
-        端末やSafari/ホーム画面アイコンを切り替えるとデータが分かれて見えることがあります。定期的に書き出しておくと安心です。
-      </div>
+      <div class="stat" style="display:block; margin-bottom:10px;">端末やSafari/ホーム画面アイコンを切り替えるとデータが分かれて見えることがあります。定期的に書き出しておくと安心です。</div>
       <div class="add-row">
         <button class="btn" id="export-backup">バックアップ書き出し</button>
         <button class="btn" id="import-backup">復元（読み込み）</button>
@@ -548,7 +482,6 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-// ---------- event handling ----------
 function attachHandlers() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.onclick = () => { state.activeTab = btn.dataset.tab; render(); };
@@ -557,60 +490,56 @@ function attachHandlers() {
   const machineSelect = document.getElementById('machine-select');
   if (machineSelect) machineSelect.onchange = (e) => {
     state.selectedMachineId = e.target.value;
-    state.entry = { digits: '', date: todayStr(), items: [] };
+    state.endDigits = '';
+    state.stopReason = '';
     render();
   };
 
-  const readingInput = document.getElementById('reading-input');
-  if (readingInput) {
-    readingInput.oninput = (e) => {
-      state.entry.digits = e.target.value.replace(/\D/g, '').slice(0, 9);
-      render();
+  const baseInput = document.getElementById('base-reading-input');
+  if (baseInput) {
+    baseInput.oninput = (e) => { state.endDigits = e.target.value.replace(/\D/g, '').slice(0, 9); render(); };
+    baseInput.focus();
+    baseInput.setSelectionRange(baseInput.value.length, baseInput.value.length);
+  }
+  const saveBaseBtn = document.getElementById('save-base-btn');
+  if (saveBaseBtn) saveBaseBtn.onclick = handleSaveBase;
+
+  const orderInput = document.getElementById('order-number-input');
+  if (orderInput) {
+    orderInput.oninput = async (e) => {
+      const machine = getMachine(state.selectedMachineId);
+      const digits = e.target.value.replace(/\D/g, '').slice(0, 15);
+      machine.pendingOrderDigits = digits;
+      const formatted = formatOrderNumber(digits);
+      e.target.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
+      await saveData();
+      renderSaveButtonOnly();
     };
-    readingInput.focus();
-    const v = readingInput.value;
-    readingInput.setSelectionRange(v.length, v.length);
   }
 
-  const dateInput = document.getElementById('entry-date');
-  if (dateInput) dateInput.onchange = (e) => { state.entry.date = e.target.value; };
+  const endInput = document.getElementById('end-reading-input');
+  if (endInput) {
+    endInput.oninput = (e) => { state.endDigits = e.target.value.replace(/\D/g, '').slice(0, 9); render(); };
+  }
 
-  const addOrderBtn = document.querySelector('[data-action="add-order"]');
-  if (addOrderBtn) addOrderBtn.onclick = () => {
-    state.entry.items.push({ id: uid(), type: 'order', orderNumber: '', hours: '' });
-    render();
-  };
-  const addStopBtn = document.querySelector('[data-action="add-stop"]');
-  if (addStopBtn) addStopBtn.onclick = () => {
-    state.entry.items.push({ id: uid(), type: 'stop', reason: state.data.stopReasons[0] || '', hours: '' });
-    render();
-  };
+  const stopSelect = document.getElementById('stop-reason-select');
+  if (stopSelect) stopSelect.onchange = (e) => { state.stopReason = e.target.value; };
 
-  document.querySelectorAll('[data-action="remove-item"]').forEach(btn => {
-    btn.onclick = () => { state.entry.items.splice(parseInt(btn.dataset.idx), 1); render(); };
-  });
-  document.querySelectorAll('[data-action="order-number"]').forEach(inp => {
-    inp.oninput = (e) => {
-      const idx = parseInt(inp.dataset.idx);
-      const formatted = formatOrderNumber(e.target.value);
-      state.entry.items[idx].orderNumber = formatted;
-      const pos = formatted.length;
-      e.target.value = formatted;
-      requestAnimationFrame(() => e.target.setSelectionRange(pos, pos));
-    };
-  });
-  document.querySelectorAll('[data-action="stop-reason"]').forEach(sel => {
-    sel.onchange = (e) => { state.entry.items[parseInt(sel.dataset.idx)].reason = e.target.value; };
-  });
-  document.querySelectorAll('[data-action="item-hours"]').forEach(inp => {
-    inp.oninput = (e) => { state.entry.items[parseInt(inp.dataset.idx)].hours = e.target.value; render(); };
-  });
-
-  const saveBtn = document.getElementById('save-btn');
-  if (saveBtn) saveBtn.onclick = handleSave;
+  const saveCycleBtn = document.getElementById('save-cycle-btn');
+  if (saveCycleBtn) saveCycleBtn.onclick = handleSaveCycle;
 
   const historyFilter = document.getElementById('history-filter');
   if (historyFilter) historyFilter.onchange = (e) => { state.historyFilterMachine = e.target.value; render(); };
+
+  document.querySelectorAll('[data-action="toggle-date"]').forEach(el => {
+    el.onclick = () => {
+      const d = el.dataset.date;
+      state.expandedDate = state.expandedDate === d ? null : d;
+      render();
+    };
+  });
 
   const exportBtn = document.getElementById('export-csv');
   if (exportBtn) exportBtn.onclick = exportCsv;
@@ -620,7 +549,7 @@ function attachHandlers() {
     const inp = document.getElementById('new-machine-name');
     const name = inp.value.trim();
     if (!name) return;
-    state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null });
+    state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' });
     await saveData();
     render();
   };
@@ -662,7 +591,6 @@ function attachHandlers() {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
-
   const importBackupBtn = document.getElementById('import-backup');
   const importFileInput = document.getElementById('import-file-input');
   if (importBackupBtn && importFileInput) {
@@ -687,65 +615,70 @@ function attachHandlers() {
   }
 }
 
-async function handleSave() {
+// lightweight refresh of just the save button's disabled state, to avoid losing focus while typing order number
+function renderSaveButtonOnly() {
   const machine = getMachine(state.selectedMachineId);
-  const currentMinutes = digitsToMinutes(state.entry.digits);
-  if (currentMinutes === null) return;
-  const hasPrev = machine.lastReadingMinutes !== null && machine.lastReadingMinutes !== undefined;
+  const endMinutes = digitsToMinutes(state.endDigits);
+  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
+  const btn = document.getElementById('save-cycle-btn');
+  if (btn) btn.disabled = !(orderComplete && endMinutes !== null);
+}
 
-  if (!hasPrev) {
-    machine.lastReadingMinutes = currentMinutes;
-    machine.lastReadingDigits = state.entry.digits;
-    machine.lastDate = state.entry.date;
-    await saveData();
-    state.entry = { digits: '', date: todayStr(), items: [] };
-    showToast('基準として保存しました');
-    render();
-    return;
-  }
+async function handleSaveBase() {
+  const machine = getMachine(state.selectedMachineId);
+  const minutes = digitsToMinutes(state.endDigits);
+  if (minutes === null) return;
+  machine.lastReadingMinutes = minutes;
+  machine.lastReadingDigits = state.endDigits;
+  machine.lastDate = todayStr();
+  machine.pendingOrderDigits = '';
+  await saveData();
+  state.endDigits = '';
+  showToast('基準として保存しました');
+  render();
+}
 
-  const elapsed = roundQuarter(Math.max(0, currentMinutes - machine.lastReadingMinutes) / 60);
+async function handleSaveCycle() {
+  const machine = getMachine(state.selectedMachineId);
+  const endMinutes = digitsToMinutes(state.endDigits);
+  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
+  if (endMinutes === null || !orderComplete) return;
+
+  const elapsed = roundQuarter(Math.max(0, endMinutes - machine.lastReadingMinutes) / 60);
   const log = {
     id: uid(),
-    date: state.entry.date,
+    date: todayStr(),
     machineId: machine.id,
     startMinutes: machine.lastReadingMinutes,
-    endMinutes: currentMinutes,
+    endMinutes: endMinutes,
     elapsedHours: elapsed,
-    entries: state.entry.items.map(it => it.type === 'order'
-      ? { type: 'order', orderNumber: it.orderNumber, hours: parseFloat(it.hours) }
-      : { type: 'stop', reason: it.reason, hours: parseFloat(it.hours) }),
+    orderNumber: formatOrderNumber(machine.pendingOrderDigits),
+    stopReason: state.stopReason || null,
     savedAt: Date.now()
   };
   state.data.logs.push(log);
-  machine.lastReadingMinutes = currentMinutes;
-  machine.lastReadingDigits = state.entry.digits;
-  machine.lastDate = state.entry.date;
+  machine.lastReadingMinutes = endMinutes;
+  machine.lastReadingDigits = state.endDigits;
+  machine.lastDate = todayStr();
+  machine.pendingOrderDigits = '';
   await saveData();
-  state.entry = { digits: '', date: todayStr(), items: [] };
+  state.endDigits = '';
+  state.stopReason = '';
   showToast('記録を保存しました');
   render();
 }
 
 function exportCsv() {
-  const rows = [['日付','機械','種別','受注番号/停止理由','時間(h)','開始値','終了値','経過時間(h)']];
+  const rows = [['日付','機械','受注番号','停止理由','経過時間(h)','開始値','終了値']];
   state.data.logs
     .slice()
-    .sort((a,b) => a.date.localeCompare(b.date))
+    .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
     .forEach(l => {
       const machine = getMachine(l.machineId);
-      if (l.entries.length === 0) {
-        rows.push([l.date, machine?.name || '', '', '', '', minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes), l.elapsedHours]);
-      } else {
-        l.entries.forEach(e => {
-          rows.push([
-            l.date, machine?.name || '',
-            e.type === 'order' ? '受注番号' : '停止',
-            e.type === 'order' ? e.orderNumber : e.reason,
-            e.hours, minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes), l.elapsedHours
-          ]);
-        });
-      }
+      rows.push([
+        l.date, machine?.name || '', l.orderNumber, l.stopReason || '',
+        l.elapsedHours, minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes)
+      ]);
     });
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -759,7 +692,6 @@ function exportCsv() {
   URL.revokeObjectURL(url);
 }
 
-// ---------- init ----------
 (async function init() {
   await loadData();
   render();
