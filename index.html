@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.8</title>
+<title>稼働ログ v1.9</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -352,7 +352,9 @@ let state = {
   processHistoryExpandedDate: null,
   showFinalizeConfirm: false,
   editingOrderId: null,
-  editOrderDigits: ''
+  editOrderDigits: '',
+  editingLogId: null,
+  editLogStopReasons: []
 };
 
 async function loadData() {
@@ -404,7 +406,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.8</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.9</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -565,6 +567,7 @@ function renderLogEntry(l) {
   const machine = getMachine(l.machineId);
   const reasons = l.stopReasons || (l.stopReason ? [l.stopReason] : []);
   const rawLabel = (l.rawElapsedHours !== undefined && l.rawElapsedHours !== null) ? `（丸め前 ${fmtHours(l.rawElapsedHours)}h）` : '';
+  const editing = state.editingLogId === l.id;
   return `
     <div class="log-entry">
       <div class="log-entry-head">
@@ -572,7 +575,20 @@ function renderLogEntry(l) {
         <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
       </div>
       <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h ${rawLabel}</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
-      ${reasons.length > 0 ? `<div>${reasons.map(r => `<span class="stop-chip" style="margin-right:4px;">⛔ ${escapeHtml(r)}</span>`).join('')}</div>` : ''}
+      ${editing ? `
+        <div class="process-chips" style="margin-top:8px;">
+          ${state.data.stopReasons.map(r => `<button class="process-chip ${state.editLogStopReasons.includes(r) ? 'selected' : ''}" data-action="toggle-edit-log-reason" data-reason="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}
+        </div>
+        <div class="add-row" style="margin-top:8px;">
+          <button class="btn" data-action="save-log-reasons" data-id="${l.id}">保存</button>
+          <button class="btn-danger" data-action="cancel-edit-log-reasons">取消</button>
+        </div>
+      ` : `
+        <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:4px;">
+          ${reasons.map(r => `<span class="stop-chip">⛔ ${escapeHtml(r)}</span>`).join('')}
+          <button class="remove-order-btn" data-action="edit-log-reasons" data-id="${l.id}" style="margin-top:0;">停止理由を編集</button>
+        </div>
+      `}
     </div>
   `;
 }
@@ -909,6 +925,30 @@ function bindDelegatedHandlers() {
       case 'clear-order-number': {
         const m = getMachine(t.dataset.id);
         m.pendingOrderDigits = '';
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-log-reasons': {
+        const log = state.data.logs.find(l => l.id === t.dataset.id);
+        state.editingLogId = log.id;
+        state.editLogStopReasons = [...(log.stopReasons || (log.stopReason ? [log.stopReason] : []))];
+        render();
+        break;
+      }
+      case 'toggle-edit-log-reason': {
+        const r = t.dataset.reason;
+        const idx = state.editLogStopReasons.indexOf(r);
+        if (idx === -1) state.editLogStopReasons.push(r); else state.editLogStopReasons.splice(idx, 1);
+        render();
+        break;
+      }
+      case 'cancel-edit-log-reasons': state.editingLogId = null; render(); break;
+      case 'save-log-reasons': {
+        const log = state.data.logs.find(l => l.id === t.dataset.id);
+        log.stopReasons = [...state.editLogStopReasons];
+        delete log.stopReason;
+        state.editingLogId = null;
         await saveData();
         render();
         break;
