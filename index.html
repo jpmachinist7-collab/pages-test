@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.9</title>
+<title>稼働ログ v1.10</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -406,7 +406,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.9</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.10</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -475,7 +475,7 @@ function renderRecordTab() {
       <div class="panel base">
         <div class="step-label">初回登録</div>
         <label>基準となるカウンター値（機械の表示のまま）</label>
-        <input type="tel" inputmode="numeric" id="base-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="base-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
       </div>
       <button class="btn-primary" id="save-base-btn" data-action="save-base" ${currentMinutes === null ? 'disabled' : ''}>基準として保存</button>
     `;
@@ -494,7 +494,7 @@ function renderRecordTab() {
       <div class="field" style="margin-top:10px;">
         <label>受注番号</label>
         <div class="row">
-          <input type="tel" inputmode="numeric" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
           <button class="btn-danger" data-action="clear-order-number" data-id="${machine.id}" style="flex:0 0 auto;">削除</button>
         </div>
       </div>
@@ -504,7 +504,7 @@ function renderRecordTab() {
       <div class="step-label">終了</div>
       <div class="field">
         <label>終了時のカウンター値</label>
-        <input type="tel" inputmode="numeric" id="end-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="end-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
       </div>
       ${elapsed !== null ? `
         <div class="elapsed-display">
@@ -701,7 +701,7 @@ function renderProcessRecordTab() {
     <div class="panel">
       <label>受注番号を追加</label>
       <div class="row">
-        <input type="tel" inputmode="numeric" id="new-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.newOrderDigits)}">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="new-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.newOrderDigits)}">
         <button class="btn" id="add-order-btn" data-action="add-order" style="flex:0 0 auto;" ${orderNumberDigitCount(state.newOrderDigits) === 15 ? '' : 'disabled'}>追加</button>
       </div>
     </div>
@@ -725,7 +725,7 @@ function renderOrderCard(o, processes) {
       <div class="order-card">
         <label>受注番号を編集</label>
         <div class="row">
-          <input type="tel" inputmode="numeric" id="edit-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.editOrderDigits)}">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="edit-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.editOrderDigits)}">
         </div>
         <div class="add-row" style="margin-top:10px;">
           <button class="btn" data-action="save-order-number" data-id="${o.id}" ${orderNumberDigitCount(state.editOrderDigits) === 15 ? '' : 'disabled'}>保存</button>
