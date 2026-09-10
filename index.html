@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.16</title>
+<title>稼働ログ v1.17</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -362,6 +362,7 @@ let state = {
   editProcessName: '',
   processHistoryExpandedDate: null,
   showFinalizeConfirm: false,
+  showDailySummary: false,
   editingOrderId: null,
   editOrderDigits: '',
   editingLogId: null,
@@ -425,7 +426,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.16</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.17</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -721,8 +722,22 @@ function orderCurrentDisplaySeconds(order, bucketKey) {
 function renderProcessRecordTab() {
   const processes = state.data.processes;
   const orders = state.data.activeOrders;
-  const anyRunning = orders.some(o => o.running);
   const grandTotal = orders.reduce((s, o) => s + orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0), 0);
+
+  if (state.showDailySummary) {
+    return `
+      <div class="panel">
+        <h2>本日の集計</h2>
+        <div class="stat"><span>全体合計</span><b>${fmtDualTime(grandTotal)}</b></div>
+      </div>
+      ${orders.map(renderOrderSummaryCard).join('')}
+      <div class="finalize-panel">
+        <button class="btn-primary" data-action="finalize" style="margin-bottom:8px;">本日の集計をリセットする</button>
+        <button class="btn" data-action="hide-daily-summary" style="width:100%;">閉じる（リセットしない）</button>
+        <div class="stat" style="justify-content:center; margin-top:6px;">外部システムへの実績入力が済んだらリセットしてください</div>
+      </div>
+    `;
+  }
 
   return `
     <div class="panel">
@@ -739,10 +754,19 @@ function renderProcessRecordTab() {
     ${orders.length > 0 ? `
       <div class="finalize-panel">
         <div class="stat"><span>本日の合計</span><b>${fmtDualTime(grandTotal)}</b></div>
-        <button class="btn-primary" id="finalize-btn" data-action="finalize" style="margin-top:8px;">本日の集計を確定してリセット</button>
-        <div class="stat" style="justify-content:center; margin-top:6px;">確定すると履歴に保存され、カードはリセットされます</div>
+        <button class="btn-primary" data-action="show-daily-summary" style="margin-top:8px;">本日の工程を集計する</button>
       </div>
     ` : ''}
+  `;
+}
+
+function renderOrderSummaryCard(o) {
+  const breakdown = renderOrderBreakdown(o);
+  return `
+    <div class="panel">
+      <h2 style="letter-spacing:0.02em;">${escapeHtml(o.orderNumber)}</h2>
+      ${breakdown || '<div class="empty">記録なし</div>'}
+    </div>
   `;
 }
 
@@ -1260,6 +1284,8 @@ function bindDelegatedHandlers() {
         render();
         break;
       }
+      case 'show-daily-summary': state.showDailySummary = true; render(); break;
+      case 'hide-daily-summary': state.showDailySummary = false; render(); break;
       case 'finalize': {
         if (!confirm('本日の集計を履歴に保存し、時間をリセットします（受注番号のカードは残ります）。よろしいですか？')) return;
         const date = todayStr();
@@ -1274,6 +1300,7 @@ function bindDelegatedHandlers() {
           o.currentProcess = null;
           o.isOvertimeMode = false;
         });
+        state.showDailySummary = false;
         await saveData();
         showToast('集計を保存しました');
         render();
