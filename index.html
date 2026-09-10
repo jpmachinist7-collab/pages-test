@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.12</title>
+<title>稼働ログ v1.13</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -241,6 +241,8 @@
     padding: 6px 12px; border-radius: 20px; font-size: 0.8rem;
   }
   .process-chip.selected { background: var(--cyan-dim); color: var(--cyan); border-color: var(--cyan); }
+  .process-chip.overtime { border-color: var(--red-dim); color: var(--red); }
+  .process-chip.overtime.selected { background: var(--red-dim); color: var(--red); border-color: var(--red); }
   .order-timer {
     text-align: center; font-size: 1.7rem; font-weight: 700; color: var(--cyan);
     font-variant-numeric: tabular-nums;
@@ -333,7 +335,8 @@ function defaultData() {
     breaks: [
       { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
       { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
-    ]
+    ],
+    overtimeStart: '17:45'
   };
 }
 
@@ -377,6 +380,7 @@ async function loadData() {
     { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
     { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
   ];
+  if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
   if (!state.data.processLogs) state.data.processLogs = [];
   if (!state.selectedMachineId && state.data.machines.length) {
     state.selectedMachineId = state.data.machines[0].id;
@@ -416,7 +420,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.12</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.13</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -755,6 +759,7 @@ function renderOrderCard(o, processes) {
       ${o.onBreak ? `<div class="stop-chip" style="margin-bottom:8px;">☕ 休憩中（自動で一時停止・終了後に自動再開します）</div>` : ''}
       <div class="process-chips">
         ${processes.map(p => `<button class="process-chip ${o.currentProcess === p ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join('')}
+        <button class="process-chip overtime ${o.currentProcess === OVERTIME_LABEL ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${OVERTIME_LABEL}">${OVERTIME_LABEL}</button>
       </div>
       <div class="order-timer-label">${o.currentProcess ? '案件の本日の作業時間合計' : '工程を選択してください'}</div>
       <div class="order-timer" data-timer-total="${o.id}">${fmtDualTime(total)}</div>
@@ -777,6 +782,7 @@ function fmtDateShort(dstr) {
   const d = new Date(dstr + 'T00:00:00');
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
+const OVERTIME_LABEL = '残業';
 const CHART_PALETTE = ['#00e5ff','#ff6b6b','#ffd166','#8fd3ff','#c792ea','#7ee787','#f78c6c','#82aaff'];
 
 function renderProcessChart() {
@@ -893,6 +899,14 @@ function renderProcessMasterTab() {
         <input type="time" id="new-break-start" style="flex:1;">
         <input type="time" id="new-break-end" style="flex:1;">
         <button class="btn" id="add-break" data-action="add-break-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>残業の区分開始時刻</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">この時刻を過ぎると、動いている工程カウンターは自動で「${OVERTIME_LABEL}」に切り替わります（その日1回だけ・手動でいつでも他の工程に戻せます）。</div>
+      <div class="row">
+        <input type="time" id="overtime-start-input" value="${escapeHtml(state.data.overtimeStart)}">
+        <button class="btn" data-action="save-overtime-start" style="flex:0 0 auto;">保存</button>
       </div>
     </div>
   `;
@@ -1034,6 +1048,15 @@ function bindDelegatedHandlers() {
         render();
         break;
       }
+      case 'save-overtime-start': {
+        const val = document.getElementById('overtime-start-input').value;
+        if (!val) { showToast('時刻を入力してください'); return; }
+        state.data.overtimeStart = val;
+        await saveData();
+        showToast('保存しました');
+        render();
+        break;
+      }
 
       case 'add-machine-btn': {
         const inp = document.getElementById('new-machine-name');
@@ -1126,7 +1149,7 @@ function bindDelegatedHandlers() {
         state.data.activeOrders.push({
           id: uid(), orderNumber: formatOrderNumber(state.newOrderDigits),
           currentProcess: null, running: false, lastResumeAt: null, totals: {},
-          onBreak: false, preBreakProcess: null
+          onBreak: false, preBreakProcess: null, overtimeSwitchedDate: null
         });
         state.newOrderDigits = '';
         await saveData();
@@ -1363,6 +1386,7 @@ function bindDelegatedHandlers() {
           { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
           { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
         ];
+        if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
         await saveData();
         showToast('復元しました');
         render();
@@ -1433,9 +1457,34 @@ async function checkBreaksAndAutoSwitch() {
   }
 }
 
+// ---------- overtime auto-switch (17:45〜 default, editable) ----------
+async function checkOvertimeAutoSwitch() {
+  if (!state.data || !state.data.activeOrders || state.data.activeOrders.length === 0) return;
+  const overtimeStartMin = timeStrToMinutes(state.data.overtimeStart || '17:45');
+  const isOvertimeNow = nowMinutesOfDay() >= overtimeStartMin;
+  if (!isOvertimeNow) return;
+  const today = todayStr();
+  let changed = false;
+
+  state.data.activeOrders.forEach(o => {
+    if (o.running && !o.onBreak && o.overtimeSwitchedDate !== today && o.currentProcess !== OVERTIME_LABEL) {
+      flushOrder(o);
+      o.currentProcess = OVERTIME_LABEL;
+      o.overtimeSwitchedDate = today;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await saveData();
+    render();
+  }
+}
+
 // lightweight per-second refresh of visible timers without a full re-render
 setInterval(async () => {
   await checkBreaksAndAutoSwitch();
+  await checkOvertimeAutoSwitch();
   if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
   const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
   if (!anyRunning) return;
