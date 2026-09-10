@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.19</title>
+<title>稼働ログ v1.20</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -431,7 +431,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.19</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.20</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -584,6 +584,9 @@ function renderHistoryTab() {
       </select>
       <button class="btn" id="export-csv" data-action="export-csv">CSV書き出し</button>
     </div>
+    <div class="add-row" style="margin-bottom:14px;">
+      <button class="btn-danger" data-action="clear-all-logs" ${dates.length === 0 ? 'disabled' : ''} style="width:100%;">表示中の履歴をすべて削除</button>
+    </div>
     <div class="panel">
       ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderDateRow(d, byDate[d])).join('')}
     </div>
@@ -595,12 +598,13 @@ function renderDateRow(date, logs) {
   const expanded = state.expandedDate === date;
   return `
     <div>
-      <div class="date-row" data-action="toggle-date" data-date="${date}">
-        <div>
+      <div class="date-row">
+        <div data-action="toggle-date" data-date="${date}" style="flex:1;">
           <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
           <div class="d-sub">${logs.length}件 / 合計 ${fmtHours(total)}h</div>
         </div>
-        <div class="chev">${expanded ? '▲' : '▼'}</div>
+        <button class="btn-danger" data-action="delete-date" data-date="${date}" style="margin-right:8px;">削除</button>
+        <div class="chev" data-action="toggle-date" data-date="${date}">${expanded ? '▲' : '▼'}</div>
       </div>
       ${expanded ? `<div class="date-detail">${logs.map(renderLogEntry).join('')}</div>` : ''}
     </div>
@@ -631,6 +635,7 @@ function renderLogEntry(l) {
         <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:4px;">
           ${reasons.map(r => `<span class="stop-chip">⛔ ${escapeHtml(r)}</span>`).join('')}
           <button class="remove-order-btn" data-action="edit-log-reasons" data-id="${l.id}" style="margin-top:0;">停止理由を編集</button>
+          <button class="remove-order-btn" data-action="delete-log" data-id="${l.id}" style="margin-top:0;">この記録を削除</button>
         </div>
       `}
     </div>
@@ -1255,6 +1260,41 @@ function bindDelegatedHandlers() {
       case 'toggle-date': {
         const d = t.dataset.date;
         state.expandedDate = state.expandedDate === d ? null : d;
+        render();
+        break;
+      }
+      case 'delete-log': {
+        if (!confirm('この記録を削除します。よろしいですか？')) return;
+        state.data.logs = state.data.logs.filter(l => l.id !== t.dataset.id);
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'delete-date': {
+        if (!confirm(`${fmtDateJp(t.dataset.date)}の記録をすべて削除します。よろしいですか？`)) return;
+        const filterMachine = state.historyFilterMachine;
+        state.data.logs = state.data.logs.filter(l => {
+          if (l.date !== t.dataset.date) return true;
+          if (filterMachine !== 'all' && l.machineId !== filterMachine) return true;
+          return false;
+        });
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'clear-all-logs': {
+        const filterMachine = state.historyFilterMachine;
+        const targetCount = state.data.logs.filter(l => filterMachine === 'all' || l.machineId === filterMachine).length;
+        if (targetCount === 0) return;
+        const msg = filterMachine === 'all'
+          ? 'すべての機械の履歴をすべて削除します。元に戻せません。よろしいですか？'
+          : '選択中の機械の履歴をすべて削除します。元に戻せません。よろしいですか？';
+        if (!confirm(msg)) return;
+        state.data.logs = state.data.logs.filter(l => !(filterMachine === 'all' || l.machineId === filterMachine));
+        await saveData();
+        showToast('削除しました');
         render();
         break;
       }
