@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.18</title>
+<title>稼働ログ v1.19</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -367,6 +367,9 @@ let state = {
   editingOrderId: null,
   editOrderDigits: '',
   editingLogId: null,
+  editingStartMachineId: null,
+  editStartDigits: '',
+  editStartDate: '',
   editLogStopReasons: [],
   editingBreakIdx: null,
   editBreakDraft: { name: '', start: '', end: '' }
@@ -428,7 +431,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.18</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.19</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -512,7 +515,26 @@ function renderRecordTab() {
   return machinePanel + `
     <div class="panel">
       <div class="step-label">開始</div>
-      <div class="stat"><span>${escapeHtml(fmtDateJp(machine.lastDate))}</span><b>${minutesToDisplay(machine.lastReadingMinutes)}</b></div>
+      ${state.editingStartMachineId === machine.id ? `
+        <div class="field">
+          <label>開始のカウンター値（機械の表示のまま）</label>
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="edit-start-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.editStartDigits)}">
+        </div>
+        <div class="field">
+          <label>開始の日付</label>
+          <input type="date" id="edit-start-date-input" value="${escapeHtml(state.editStartDate)}">
+        </div>
+        <div class="add-row">
+          <button class="btn" data-action="save-start" data-id="${machine.id}">保存</button>
+          <button class="btn-danger" data-action="cancel-edit-start">取消</button>
+        </div>
+      ` : `
+        <div class="stat">
+          <span>${escapeHtml(fmtDateJp(machine.lastDate))}</span>
+          <b>${minutesToDisplay(machine.lastReadingMinutes)}</b>
+        </div>
+        <button class="remove-order-btn" data-action="edit-start" data-id="${machine.id}" style="margin-top:0;">開始の値を編集</button>
+      `}
       <div class="field" style="margin-top:10px;">
         <label>受注番号</label>
         <div class="row">
@@ -1059,6 +1081,30 @@ function bindDelegatedHandlers() {
         render();
         break;
       }
+      case 'edit-start': {
+        const m = getMachine(t.dataset.id);
+        state.editingStartMachineId = m.id;
+        state.editStartDigits = m.lastReadingDigits || '';
+        state.editStartDate = m.lastDate || todayStr();
+        render();
+        break;
+      }
+      case 'cancel-edit-start': state.editingStartMachineId = null; render(); break;
+      case 'save-start': {
+        const m = getMachine(t.dataset.id);
+        const minutes = digitsToMinutes(state.editStartDigits);
+        if (minutes === null) { showToast('カウンター値を入力してください'); return; }
+        const date = document.getElementById('edit-start-date-input').value;
+        if (!date) { showToast('日付を入力してください'); return; }
+        m.lastReadingMinutes = minutes;
+        m.lastReadingDigits = state.editStartDigits;
+        m.lastDate = date;
+        state.editingStartMachineId = null;
+        await saveData();
+        showToast('開始の値を更新しました');
+        render();
+        break;
+      }
       case 'edit-log-reasons': {
         const log = state.data.logs.find(l => l.id === t.dataset.id);
         state.editingLogId = log.id;
@@ -1407,6 +1453,12 @@ function bindDelegatedHandlers() {
       render();
       const newEl = document.getElementById('end-reading-input');
       if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'edit-start-reading-input') {
+      state.editStartDigits = el.value.replace(/\D/g, '').slice(0, 9);
+      const formatted = digitsToDisplay(state.editStartDigits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
     } else if (el.id === 'order-number-input') {
       const machine = getMachine(state.selectedMachineId);
       const digits = el.value.replace(/\D/g, '').slice(0, 15);
