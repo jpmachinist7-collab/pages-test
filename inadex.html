@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>稼働ログ v1.16</title>
+<style>
+  :root {
+    --bg: #070d1f;
+    --panel: #10192f;
+    --panel-2: #0c1424;
+    --border: #1c2b4a;
+    --cyan: #00e5ff;
+    --cyan-dim: #0a4a56;
+    --red: #ff6b6b;
+    --red-dim: #4a1a1a;
+    --text: #e6f4f8;
+    --muted: #6f8199;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+    height: 100%;
+  }
+  #app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 16px 16px 148px;
+    min-height: 100vh;
+  }
+  h1 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--cyan);
+    margin: 4px 0 2px;
+  }
+  .today-line {
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 14px;
+    overflow-wrap: anywhere;
+  }
+  h2 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text);
+    margin: 0 0 10px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .panel.base { border-color: var(--cyan-dim); }
+  label {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+  select, input[type=text], input[type=number], input[type=tel] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 1rem;
+    padding: 10px 12px;
+    border-radius: 8px;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: var(--cyan); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row > * { flex: 1; }
+  .field { margin-bottom: 14px; }
+  .field:last-child { margin-bottom: 0; }
+  button { font-family: inherit; border: none; cursor: pointer; }
+  .btn {
+    background: var(--panel-2);
+    color: var(--cyan);
+    border: 1px solid var(--cyan-dim);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .btn:active { background: var(--cyan-dim); }
+  .btn-primary {
+    background: var(--cyan);
+    color: #04202a;
+    border: 1px solid var(--cyan);
+    width: 100%;
+    padding: 13px;
+    font-size: 1rem;
+    border-radius: 9px;
+    font-weight: 700;
+  }
+  .btn-primary:disabled {
+    background: var(--panel-2);
+    color: var(--muted);
+    border-color: var(--border);
+  }
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red-dim);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.78rem;
+  }
+  .stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 2px 10px;
+    padding: 6px 0;
+    font-size: 0.85rem;
+    color: var(--muted);
+    min-width: 0;
+  }
+  .stat span, .stat b { overflow-wrap: anywhere; min-width: 0; }
+  .stat b { color: var(--text); font-size: 0.95rem; }
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 14px 0;
+  }
+  .step-label {
+    font-size: 0.7rem;
+    color: var(--cyan);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .elapsed-display { text-align: center; padding: 10px 0 4px; }
+  .elapsed-display .num { font-size: 2.2rem; font-weight: 700; color: var(--cyan); line-height: 1; }
+  .elapsed-display .label { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+  .tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #0a1124;
+    border-top: 1px solid var(--border);
+    padding: 10px 10px max(10px, env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .tabbar .mode-toggle { margin-bottom: 8px; }
+  .tab-row { display: flex; }
+  .tab-btn {
+    flex: 1; background: none; color: var(--muted);
+    font-size: 0.72rem; padding: 4px 0;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .tab-btn.active { color: var(--cyan); }
+  .tab-btn .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: 0.9; }
+  .empty { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 24px 8px; }
+  .date-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 4px; border-bottom: 1px solid var(--border);
+  }
+  .date-row:last-child { border-bottom: none; }
+  .date-row .d-label { font-size: 0.95rem; font-weight: 600; }
+  .date-row .d-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+  .date-row .chev { color: var(--muted); font-size: 0.8rem; }
+  .date-detail { padding: 4px 4px 10px; }
+  .log-entry { border-bottom: 1px solid var(--border); padding: 10px 0; }
+  .log-entry:last-child { border-bottom: none; }
+  .log-entry-head { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 4px; }
+  .log-entry-head .machine { color: var(--muted); }
+  .log-entry-order { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+  .log-entry-sub { font-size: 0.78rem; color: var(--muted); display: flex; justify-content: space-between; margin-top: 2px; }
+  .stop-chip {
+    display: inline-block; font-size: 0.7rem; padding: 2px 8px; border-radius: 20px;
+    background: var(--red-dim); color: var(--red); margin-top: 4px;
+  }
+  .filter-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .master-item { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .master-item:last-child { border-bottom: none; }
+  .master-item span { flex: 1; font-size: 0.9rem; }
+  .add-row { display: flex; gap: 8px; margin-bottom: 4px; }
+  .toast {
+    position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%);
+    background: var(--cyan); color: #04202a; font-weight: 700;
+    padding: 9px 18px; border-radius: 20px; font-size: 0.85rem;
+    opacity: 0; pointer-events: none; transition: opacity .25s; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ---------- process counter (工程カウンター) ---------- */
+  .mode-toggle {
+    display: flex;
+    gap: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 4px;
+    margin-bottom: 16px;
+  }
+  .mode-btn {
+    flex: 1;
+    background: none;
+    color: var(--muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 9px 4px;
+    border-radius: 7px;
+  }
+  .mode-btn.active { background: var(--cyan); color: #04202a; }
+  .order-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .order-card.running { border-color: var(--cyan); }
+  .order-card-head {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 10px;
+  }
+  .order-card-head .order-no { font-size: 1rem; font-weight: 700; letter-spacing: 0.02em; }
+  .play-btn {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--panel-2); color: var(--cyan);
+    border: 1px solid var(--cyan-dim); font-size: 1.1rem;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .order-card.running .play-btn { background: var(--cyan); color: #04202a; }
+  .process-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .process-chip {
+    background: var(--panel-2); color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 20px; font-size: 0.8rem;
+  }
+  .process-chip.selected { background: var(--cyan-dim); color: var(--cyan); border-color: var(--cyan); }
+  .order-timer {
+    text-align: center; font-size: 1.7rem; font-weight: 700; color: var(--cyan);
+    font-variant-numeric: tabular-nums;
+  }
+  .order-timer-label { text-align: center; font-size: 0.72rem; color: var(--muted); margin-bottom: 4px; }
+  .process-breakdown { margin-top: 10px; border-top: 1px solid var(--border); padding-top: 8px; }
+  .breakdown-group-label {
+    font-size: 0.68rem; color: var(--cyan); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.04em; margin: 6px 0 2px;
+  }
+  .breakdown-group-label.overtime { color: var(--red); }
+  .process-breakdown-row {
+    display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--muted); padding: 3px 0;
+  }
+  .remove-order-btn {
+    background: none; color: var(--red); border: none; font-size: 0.75rem; margin-top: 8px;
+  }
+  .finalize-panel {
+    background: var(--panel); border: 1px solid var(--cyan-dim); border-radius: 10px;
+    padding: 14px; margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---------- storage abstraction (works in Claude artifact preview & real deployment) ----------
+const storage = {
+  async get(key) {
+    if (window.storage) {
+      try { const r = await window.storage.get(key); return r ? r.value : null; }
+      catch (e) { return null; }
+    }
+    try { return localStorage.getItem(key); } catch (e) { return null; }
+  },
+  async set(key, value) {
+    if (window.storage) {
+      try { await window.storage.set(key, value); return; } catch (e) {}
+    }
+    try { localStorage.setItem(key, value); } catch (e) {}
+  }
+};
+const DATA_KEY = 'machine-log-data-v3';
+
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function fmtDateJp(dstr) {
+  const d = new Date(dstr + 'T00:00:00');
+  const w = ['日','月','火','水','木','金','土'][d.getDay()];
+  return `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${w})`;
+}
+function roundQuarter(x) { return Math.round(x * 4) / 4; }
+function fmtHours(x) { return (Math.round(x * 100) / 100).toString(); }
+
+// ---------- counter reading: raw digits -> "H:MM", last 2 digits = minutes ----------
+function digitsToMinutes(digits) {
+  const clean = (digits || '').replace(/\D/g, '');
+  if (clean.length === 0) return null;
+  const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
+  const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
+  return parseInt(hoursPart, 10) * 60 + parseInt(minutesPart, 10);
+}
+function digitsToDisplay(digits) {
+  const clean = (digits || '').replace(/\D/g, '');
+  if (clean.length === 0) return '';
+  const hoursPart = clean.length > 2 ? clean.slice(0, -2) : '0';
+  const minutesPart = clean.length > 2 ? clean.slice(-2) : clean.padStart(2, '0');
+  return `${parseInt(hoursPart, 10)}:${minutesPart}`;
+}
+function minutesToDisplay(totalMin) {
+  if (totalMin === null || totalMin === undefined) return '';
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h}:${String(m).padStart(2, '0')}`;
+}
+
+// ---------- order number: 00-00000-000-00-000 (2-5-3-2-3 digits) ----------
+function formatOrderNumber(raw) {
+  const digits = (raw || '').replace(/\D/g, '').slice(0, 15);
+  const parts = [digits.slice(0,2), digits.slice(2,7), digits.slice(7,10), digits.slice(10,12), digits.slice(12,15)];
+  return parts.filter(p => p.length > 0).join('-');
+}
+function orderNumberDigitCount(v) { return (v || '').replace(/-/g, '').length; }
+
+function defaultData() {
+  return {
+    machines: [{ id: uid(), name: 'マシニング1号機', lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' }],
+    stopReasons: ['段取り替え', '工具交換', 'チョコ停', '材料待ち', '計画停止', 'その他'],
+    logs: [],
+    processes: ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'],
+    activeOrders: [],
+    processLogs: [],
+    breaks: [
+      { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+      { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
+      { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
+    ],
+    overtimeStart: '17:45'
+  };
+}
+
+let state = {
+  data: null,
+  mode: 'machine',
+  tabByMode: { machine: 'record', process: 'record' },
+  selectedMachineId: null,
+  endDigits: '',
+  stopReasons: [],
+  historyFilterMachine: 'all',
+  expandedDate: null,
+  editingMachineId: null,
+  editMachineName: '',
+  editingReasonIdx: null,
+  editReasonName: '',
+  newOrderDigits: '',
+  editingProcessIdx: null,
+  editProcessName: '',
+  processHistoryExpandedDate: null,
+  showFinalizeConfirm: false,
+  editingOrderId: null,
+  editOrderDigits: '',
+  editingLogId: null,
+  editLogStopReasons: [],
+  editingBreakIdx: null,
+  editBreakDraft: { name: '', start: '', end: '' }
+};
+
+async function loadData() {
+  const raw = await storage.get(DATA_KEY);
+  if (raw) {
+    try { state.data = JSON.parse(raw); } catch (e) { state.data = defaultData(); }
+  } else {
+    state.data = defaultData();
+  }
+  // backward compatibility for data saved before the process-counter feature existed
+  if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
+  if (!state.data.activeOrders) state.data.activeOrders = [];
+  if (!state.data.breaks) state.data.breaks = [
+    { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+    { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
+    { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
+  ];
+  if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
+  if (!state.data.processLogs) state.data.processLogs = [];
+  if (!state.selectedMachineId && state.data.machines.length) {
+    state.selectedMachineId = state.data.machines[0].id;
+  }
+}
+async function saveData() { await storage.set(DATA_KEY, JSON.stringify(state.data)); }
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 1600);
+}
+
+// ---------- save a file: use the native share sheet (Files/Dropbox/etc.) when available ----------
+async function shareOrDownload(content, filename, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  try {
+    const file = new File([blob], filename, { type: mimeType });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+      return;
+    }
+  } catch (e) {
+    // user cancelled share, or share failed — fall back to a normal download link
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.16</span></h1>
+    <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
+    ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
+    <div class="tabbar">
+      <div class="mode-toggle">
+        <button class="mode-btn ${state.mode === 'machine' ? 'active' : ''}" data-mode="machine">機械稼働</button>
+        <button class="mode-btn ${state.mode === 'process' ? 'active' : ''}" data-mode="process">工程カウンター</button>
+      </div>
+      <div class="tab-row">
+        ${tabBtn('record', '記録')}
+        ${tabBtn('history', '履歴')}
+        ${tabBtn('master', 'マスタ管理')}
+      </div>
+    </div>
+  `;
+  refreshVolatileUiBits();
+}
+// small per-render tasks that don't need full event (re)binding, since events are
+// handled by permanent delegated listeners set up once in bindDelegatedHandlers()
+function refreshVolatileUiBits() {
+  // (intentionally left minimal: auto-focusing inputs here caused the keyboard to
+  // pop unexpectedly on unrelated re-renders, e.g. right after tapping a bottom tab,
+  // which shifted the layout and made the next tap land on the wrong element)
+}
+function getActiveTab() { return state.tabByMode[state.mode]; }
+function renderMachineMode() {
+  const tab = state.tabByMode.machine;
+  return `
+    ${tab === 'record' ? renderRecordTab() : ''}
+    ${tab === 'history' ? renderHistoryTab() : ''}
+    ${tab === 'master' ? renderMasterTab() : ''}
+  `;
+}
+function renderProcessMode() {
+  const tab = state.tabByMode.process;
+  return `
+    ${tab === 'record' ? renderProcessRecordTab() : ''}
+    ${tab === 'history' ? renderProcessHistoryTab() : ''}
+    ${tab === 'master' ? renderProcessMasterTab() : ''}
+  `;
+}
+function tabBtn(id, label) {
+  return `<button class="tab-btn ${getActiveTab() === id ? 'active' : ''}" data-tab="${id}"><span class="dot"></span>${label}</button>`;
+}
+function getMachine(id) { return state.data.machines.find(m => m.id === id); }
+
+function renderRecordTab() {
+  const machines = state.data.machines;
+  if (!machines.length) {
+    return `<div class="panel empty">機械が登録されていません。<br>「マスタ管理」タブから追加してください。</div>`;
+  }
+  const machine = getMachine(state.selectedMachineId) || machines[0];
+  const hasPrev = machine.lastReadingMinutes !== null && machine.lastReadingMinutes !== undefined;
+
+  const machinePanel = `
+    <div class="panel">
+      <label>機械</label>
+      <select id="machine-select">
+        ${machines.map(m => `<option value="${m.id}" ${m.id === machine.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+    </div>
+  `;
+
+  if (!hasPrev) {
+    const currentMinutes = digitsToMinutes(state.endDigits);
+    return machinePanel + `
+      <div class="panel base">
+        <div class="step-label">初回登録</div>
+        <label>基準となるカウンター値（機械の表示のまま）</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="base-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
+      </div>
+      <button class="btn-primary" id="save-base-btn" data-action="save-base" ${currentMinutes === null ? 'disabled' : ''}>基準として保存</button>
+    `;
+  }
+
+  const endMinutes = digitsToMinutes(state.endDigits);
+  const rawElapsed = endMinutes !== null ? Math.max(0, endMinutes - machine.lastReadingMinutes) / 60 : null;
+  const elapsed = rawElapsed !== null ? roundQuarter(rawElapsed) : null;
+  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
+  const canSave = orderComplete && endMinutes !== null;
+
+  return machinePanel + `
+    <div class="panel">
+      <div class="step-label">開始</div>
+      <div class="stat"><span>${escapeHtml(fmtDateJp(machine.lastDate))}</span><b>${minutesToDisplay(machine.lastReadingMinutes)}</b></div>
+      <div class="field" style="margin-top:10px;">
+        <label>受注番号</label>
+        <div class="row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="order-number-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(machine.pendingOrderDigits)}">
+          <button class="btn-danger" data-action="clear-order-number" data-id="${machine.id}" style="flex:0 0 auto;">削除</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="step-label">終了</div>
+      <div class="field">
+        <label>終了時のカウンター値</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="end-reading-input" placeholder="例：12345612 → 123456:12" value="${digitsToDisplay(state.endDigits)}">
+      </div>
+      ${elapsed !== null ? `
+        <div class="elapsed-display">
+          <div class="num">${fmtHours(elapsed)} h</div>
+          <div class="label">経過時間（0.25h単位に丸め）／ 丸め前：${fmtHours(rawElapsed)}h</div>
+        </div>
+      ` : ''}
+      <div class="field">
+        <label>停止理由（あれば選択・複数選択可・任意）</label>
+        <div class="process-chips">
+          ${state.data.stopReasons.map(r => `<button class="process-chip ${state.stopReasons.includes(r) ? 'selected' : ''}" data-action="toggle-stop-reason" data-reason="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}
+        </div>
+      </div>
+    </div>
+
+    <button class="btn-primary" id="save-cycle-btn" data-action="save-cycle" ${canSave ? '' : 'disabled'}>この記録を保存</button>
+    ${!orderComplete && machine.pendingOrderDigits ? `<div class="stat" style="justify-content:center; margin-top:8px;">受注番号は15桁必要です</div>` : ''}
+  `;
+}
+
+function renderHistoryTab() {
+  const machines = state.data.machines;
+  const filtered = state.data.logs.filter(l => state.historyFilterMachine === 'all' || l.machineId === state.historyFilterMachine);
+  const byDate = {};
+  filtered.forEach(l => { (byDate[l.date] = byDate[l.date] || []).push(l); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+
+  return `
+    <div class="filter-row">
+      <select id="history-filter">
+        <option value="all" ${state.historyFilterMachine === 'all' ? 'selected' : ''}>すべての機械</option>
+        ${machines.map(m => `<option value="${m.id}" ${state.historyFilterMachine === m.id ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('')}
+      </select>
+      <button class="btn" id="export-csv" data-action="export-csv">CSV書き出し</button>
+    </div>
+    <div class="panel">
+      ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderDateRow(d, byDate[d])).join('')}
+    </div>
+  `;
+}
+
+function renderDateRow(date, logs) {
+  const total = logs.reduce((s, l) => s + l.elapsedHours, 0);
+  const expanded = state.expandedDate === date;
+  return `
+    <div>
+      <div class="date-row" data-action="toggle-date" data-date="${date}">
+        <div>
+          <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
+          <div class="d-sub">${logs.length}件 / 合計 ${fmtHours(total)}h</div>
+        </div>
+        <div class="chev">${expanded ? '▲' : '▼'}</div>
+      </div>
+      ${expanded ? `<div class="date-detail">${logs.map(renderLogEntry).join('')}</div>` : ''}
+    </div>
+  `;
+}
+
+function renderLogEntry(l) {
+  const machine = getMachine(l.machineId);
+  const reasons = l.stopReasons || (l.stopReason ? [l.stopReason] : []);
+  const rawLabel = (l.rawElapsedHours !== undefined && l.rawElapsedHours !== null) ? `（丸め前 ${fmtHours(l.rawElapsedHours)}h）` : '';
+  const editing = state.editingLogId === l.id;
+  return `
+    <div class="log-entry">
+      <div class="log-entry-head">
+        <span class="log-entry-order">${escapeHtml(l.orderNumber)}</span>
+        <span class="machine">${escapeHtml(machine ? machine.name : '不明')}</span>
+      </div>
+      <div class="log-entry-sub"><span>経過 ${fmtHours(l.elapsedHours)}h ${rawLabel}</span><span>${minutesToDisplay(l.startMinutes)} → ${minutesToDisplay(l.endMinutes)}</span></div>
+      ${editing ? `
+        <div class="process-chips" style="margin-top:8px;">
+          ${state.data.stopReasons.map(r => `<button class="process-chip ${state.editLogStopReasons.includes(r) ? 'selected' : ''}" data-action="toggle-edit-log-reason" data-reason="${escapeHtml(r)}">${escapeHtml(r)}</button>`).join('')}
+        </div>
+        <div class="add-row" style="margin-top:8px;">
+          <button class="btn" data-action="save-log-reasons" data-id="${l.id}">保存</button>
+          <button class="btn-danger" data-action="cancel-edit-log-reasons">取消</button>
+        </div>
+      ` : `
+        <div style="display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-top:4px;">
+          ${reasons.map(r => `<span class="stop-chip">⛔ ${escapeHtml(r)}</span>`).join('')}
+          <button class="remove-order-btn" data-action="edit-log-reasons" data-id="${l.id}" style="margin-top:0;">停止理由を編集</button>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderMasterTab() {
+  return `
+    <div class="panel">
+      <h2>機械一覧</h2>
+      ${state.data.machines.map(m => renderMachineRow(m)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-machine-name" placeholder="新しい機械名">
+        <button class="btn" id="add-machine" data-action="add-machine-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>停止理由一覧</h2>
+      ${state.data.stopReasons.map((r, idx) => renderReasonRow(r, idx)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-reason-name" placeholder="新しい停止理由">
+        <button class="btn" id="add-reason" data-action="add-reason-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>バックアップ</h2>
+      <div class="stat" style="display:block; margin-bottom:10px;">端末やSafari/ホーム画面アイコンを切り替えるとデータが分かれて見えることがあります。定期的に書き出しておくと安心です。</div>
+      <div class="add-row">
+        <button class="btn" id="export-backup" data-action="export-backup">バックアップ書き出し</button>
+        <button class="btn" id="import-backup" data-action="import-backup-btn">復元（読み込み）</button>
+      </div>
+      <input type="file" id="import-file-input" accept="application/json" style="display:none;">
+    </div>
+  `;
+}
+
+function renderMachineRow(m) {
+  if (state.editingMachineId === m.id) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-machine-input" value="${escapeHtml(state.editMachineName)}" style="flex:1;">
+        <button class="btn" data-action="save-machine-name" data-id="${m.id}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-machine" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(m.name)}</span>
+      <button class="btn" data-action="edit-machine" data-id="${m.id}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-machine" data-id="${m.id}">削除</button>
+    </div>
+  `;
+}
+
+function renderReasonRow(r, idx) {
+  if (state.editingReasonIdx === idx) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-reason-input" value="${escapeHtml(state.editReasonName)}" style="flex:1;">
+        <button class="btn" data-action="save-reason-name" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-reason" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(r)}</span>
+      <button class="btn" data-action="edit-reason" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-reason" data-idx="${idx}">削除</button>
+    </div>
+  `;
+}
+
+function fmtDuration(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+}
+function fmtHM(totalSeconds) {
+  const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+function fmtHoursQuarter(totalSeconds) {
+  return fmtHours(roundQuarter(Math.max(0, totalSeconds) / 3600)) + 'h';
+}
+function fmtDualTime(totalSeconds) {
+  return `${fmtHM(totalSeconds)}<span style="font-size:0.7em; color:var(--muted);"> (${fmtHoursQuarter(totalSeconds)})</span>`;
+}
+function orderTotalSeconds(order) {
+  return Object.values(order.totals || {}).reduce((a, b) => a + b, 0);
+}
+// the totals dict key currently being accumulated: plain process name normally,
+// or "工程名（残業）" once this order has crossed into overtime for the day —
+// this keeps the process itself unchanged while separating overtime hours
+function effectiveBucketKey(order) {
+  if (!order.currentProcess) return null;
+  return order.isOvertimeMode ? `${order.currentProcess}${OVERTIME_SUFFIX}` : order.currentProcess;
+}
+function orderCurrentDisplaySeconds(order, bucketKey) {
+  const base = (order.totals && order.totals[bucketKey]) || 0;
+  if (order.running && effectiveBucketKey(order) === bucketKey && order.lastResumeAt) {
+    return base + (Date.now() - order.lastResumeAt) / 1000;
+  }
+  return base;
+}
+
+function renderProcessRecordTab() {
+  const processes = state.data.processes;
+  const orders = state.data.activeOrders;
+  const anyRunning = orders.some(o => o.running);
+  const grandTotal = orders.reduce((s, o) => s + orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0), 0);
+
+  return `
+    <div class="panel">
+      <label>受注番号を追加</label>
+      <div class="row">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="new-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.newOrderDigits)}">
+        <button class="btn" id="add-order-btn" data-action="add-order" style="flex:0 0 auto;" ${orderNumberDigitCount(state.newOrderDigits) === 15 ? '' : 'disabled'}>追加</button>
+      </div>
+    </div>
+
+    ${orders.length === 0 ? '<div class="panel empty">受注番号を追加すると、ここに作業カードが表示されます</div>' :
+      orders.map(o => renderOrderCard(o, processes)).join('')}
+
+    ${orders.length > 0 ? `
+      <div class="finalize-panel">
+        <div class="stat"><span>本日の合計</span><b>${fmtDualTime(grandTotal)}</b></div>
+        <button class="btn-primary" id="finalize-btn" data-action="finalize" style="margin-top:8px;">本日の集計を確定してリセット</button>
+        <div class="stat" style="justify-content:center; margin-top:6px;">確定すると履歴に保存され、カードはリセットされます</div>
+      </div>
+    ` : ''}
+  `;
+}
+
+function renderOrderBreakdown(o) {
+  const entries = Object.entries(o.totals).filter(([, v]) => v > 0);
+  const dayEntries = entries.filter(([k]) => !isOvertimeKey(k));
+  const otEntries = entries.filter(([k]) => isOvertimeKey(k));
+  if (dayEntries.length === 0 && otEntries.length === 0) return '';
+
+  const renderRow = ([p, v]) => `
+    <div class="process-breakdown-row"><span>${escapeHtml(dayLabelFromKey(p))}</span><span data-timer-proc="${o.id}:${escapeHtml(p)}">${fmtDualTime(orderCurrentDisplaySeconds(o, p))}</span></div>
+  `;
+
+  return `
+    <div class="process-breakdown">
+      ${dayEntries.length > 0 ? `
+        <div class="breakdown-group-label">日勤</div>
+        ${dayEntries.map(renderRow).join('')}
+      ` : ''}
+      ${otEntries.length > 0 ? `
+        <div class="breakdown-group-label overtime">残業</div>
+        ${otEntries.map(renderRow).join('')}
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderOrderCard(o, processes) {
+  if (state.editingOrderId === o.id) {
+    return `
+      <div class="order-card">
+        <label>受注番号を編集</label>
+        <div class="row">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="edit-order-input" placeholder="00-00000-000-00-000" value="${formatOrderNumber(state.editOrderDigits)}">
+        </div>
+        <div class="add-row" style="margin-top:10px;">
+          <button class="btn" data-action="save-order-number" data-id="${o.id}" ${orderNumberDigitCount(state.editOrderDigits) === 15 ? '' : 'disabled'}>保存</button>
+          <button class="btn-danger" data-action="cancel-edit-order">取消</button>
+        </div>
+      </div>
+    `;
+  }
+  const total = orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0);
+  return `
+    <div class="order-card ${o.running ? 'running' : ''}">
+      <div class="order-card-head">
+        <span class="order-no">${escapeHtml(o.orderNumber)}</span>
+        <button class="play-btn" data-action="toggle-run" data-id="${o.id}">${o.running ? '⏸' : '▶'}</button>
+      </div>
+      ${o.onBreak ? `<div class="stop-chip" style="margin-bottom:8px;">☕ 休憩中（自動で一時停止・終了後に自動再開します）</div>` : ''}
+      ${o.isOvertimeMode ? `<div class="stop-chip" style="margin-bottom:8px;">🌙 残業時間中（工程はそのまま・時間だけ区分して集計）</div>` : ''}
+      <div class="process-chips">
+        ${processes.map(p => `<button class="process-chip ${o.currentProcess === p ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join('')}
+      </div>
+      <div class="order-timer-label">${o.currentProcess ? '案件の本日の作業時間合計' : '工程を選択してください'}</div>
+      <div class="order-timer" data-timer-total="${o.id}">${fmtDualTime(total)}</div>
+      ${Object.keys(o.totals || {}).length > 0 ? renderOrderBreakdown(o) : ''}
+      <div class="add-row" style="margin-top:8px;">
+        <button class="remove-order-btn" data-action="edit-order" data-id="${o.id}">受注番号を編集</button>
+        <button class="remove-order-btn" data-action="remove-order" data-id="${o.id}">この受注番号を削除</button>
+      </div>
+    </div>
+  `;
+}
+
+function fmtDateShort(dstr) {
+  const d = new Date(dstr + 'T00:00:00');
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+const OVERTIME_LABEL = '残業';
+const OVERTIME_SUFFIX = `（${OVERTIME_LABEL}）`;
+function isOvertimeKey(key) { return key.endsWith(OVERTIME_SUFFIX); }
+function dayLabelFromKey(key) { return isOvertimeKey(key) ? key.slice(0, -OVERTIME_SUFFIX.length) : key; }
+const CHART_PALETTE = ['#00e5ff','#ff6b6b','#ffd166','#8fd3ff','#c792ea','#7ee787','#f78c6c','#82aaff'];
+
+function renderProcessChart() {
+  const logs = state.data.processLogs;
+  if (logs.length === 0) return '';
+
+  const byDate = {};
+  logs.forEach(l => {
+    byDate[l.date] = byDate[l.date] || {};
+    byDate[l.date][l.process] = (byDate[l.date][l.process] || 0) + l.seconds;
+  });
+  const dates = Object.keys(byDate).sort().slice(-14);
+  const processesUsed = [...new Set(logs.map(l => l.process))];
+  const colorMap = {};
+  processesUsed.forEach((p, i) => { colorMap[p] = CHART_PALETTE[i % CHART_PALETTE.length]; });
+
+  const dayTotalsHours = dates.map(d => roundQuarter(Object.values(byDate[d]).reduce((s, v) => s + v, 0) / 3600));
+  const maxHours = Math.max(1, ...dayTotalsHours);
+  const barW = 28, gap = 12, chartH = 150;
+  const pxPerHour = chartH / maxHours;
+
+  const bars = dates.map((d, i) => {
+    const procs = byDate[d];
+    let yOffset = chartH;
+    const x = i * (barW + gap);
+    const segments = Object.entries(procs).map(([p, sec]) => {
+      const hRounded = roundQuarter(sec / 3600);
+      const segH = hRounded * pxPerHour;
+      if (segH <= 0) return '';
+      yOffset -= segH;
+      return `<rect x="${x}" y="${yOffset}" width="${barW}" height="${segH}" fill="${colorMap[p]}" rx="2"/>`;
+    }).join('');
+    const total = dayTotalsHours[i];
+    return segments +
+      `<text x="${x + barW/2}" y="${yOffset - 4}" font-size="9" fill="#e6f4f8" text-anchor="middle">${fmtHours(total)}</text>` +
+      `<text x="${x + barW/2}" y="${chartH + 14}" font-size="9" fill="#6f8199" text-anchor="middle">${fmtDateShort(d)}</text>`;
+  }).join('');
+
+  const width = Math.max(dates.length * (barW + gap), 200);
+  const legend = processesUsed.map(p =>
+    `<span style="display:inline-flex; align-items:center; gap:4px; margin:2px 10px 2px 0;">
+      <span style="width:10px; height:10px; background:${colorMap[p]}; border-radius:2px; display:inline-block;"></span>
+      <span style="font-size:0.72rem; color:var(--muted);">${escapeHtml(p)}</span>
+    </span>`).join('');
+
+  return `
+    <div class="panel">
+      <h2>工程別 稼働時間の推移（直近${dates.length}日）</h2>
+      <div style="overflow-x:auto;">
+        <svg width="${width}" height="${chartH + 28}" viewBox="0 0 ${width} ${chartH + 28}">${bars}</svg>
+      </div>
+      <div style="margin-top:8px; display:flex; flex-wrap:wrap;">${legend}</div>
+    </div>
+  `;
+}
+
+function renderProcessHistoryTab() {
+  const byDate = {};
+  state.data.processLogs.forEach(l => { (byDate[l.date] = byDate[l.date] || []).push(l); });
+  const dates = Object.keys(byDate).sort((a, b) => b.localeCompare(a));
+  return `
+    ${renderProcessChart()}
+    <div class="filter-row">
+      <button class="btn-danger" data-action="clear-all-process-logs" ${dates.length === 0 ? 'disabled' : ''}>全履歴を削除</button>
+      <button class="btn" id="export-process-csv" data-action="export-process-csv">CSV書き出し</button>
+    </div>
+    <div class="panel">
+      ${dates.length === 0 ? '<div class="empty">記録がまだありません</div>' : dates.map(d => renderProcessDateRow(d, byDate[d])).join('')}
+    </div>
+  `;
+}
+function renderProcessDateRow(date, logs) {
+  const total = logs.reduce((s, l) => s + l.seconds, 0);
+  const expanded = state.processHistoryExpandedDate === date;
+  const dayLogs = logs.filter(l => !isOvertimeKey(l.process));
+  const otLogs = logs.filter(l => isOvertimeKey(l.process));
+  const renderLog = l => `
+        <div class="log-entry">
+          <div class="log-entry-head"><span class="log-entry-order">${escapeHtml(l.orderNumber)}</span><span class="machine">${escapeHtml(dayLabelFromKey(l.process))}</span></div>
+          <div class="log-entry-sub">
+            <span>${fmtDualTime(l.seconds)}</span>
+            <button class="btn-danger" data-action="delete-process-log" data-id="${l.id}">削除</button>
+          </div>
+        </div>
+      `;
+  return `
+    <div>
+      <div class="date-row">
+        <div data-action="toggle-process-date" data-date="${date}" style="flex:1;">
+          <div class="d-label">${escapeHtml(fmtDateJp(date))}</div>
+          <div class="d-sub">${logs.length}件 / 合計 ${fmtDualTime(total)}</div>
+        </div>
+        <button class="btn-danger" data-action="delete-process-date" data-date="${date}" style="margin-right:8px;">削除</button>
+        <div class="chev" data-action="toggle-process-date" data-date="${date}">${expanded ? '▲' : '▼'}</div>
+      </div>
+      ${expanded ? `<div class="date-detail">
+        ${dayLogs.length > 0 ? `<div class="breakdown-group-label">日勤</div>${dayLogs.map(renderLog).join('')}` : ''}
+        ${otLogs.length > 0 ? `<div class="breakdown-group-label overtime">残業</div>${otLogs.map(renderLog).join('')}` : ''}
+      </div>` : ''}
+    </div>
+  `;
+}
+
+function renderProcessMasterTab() {
+  return `
+    <div class="panel">
+      <h2>工程一覧</h2>
+      ${state.data.processes.map((p, idx) => renderProcessRow(p, idx)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px;">
+        <input type="text" id="new-process-name" placeholder="新しい工程名">
+        <button class="btn" id="add-process" data-action="add-process-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>休憩時間一覧</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">この時間になると、動いている工程カウンターは自動で一時停止し、終了後に自動で再開します。</div>
+      ${state.data.breaks.map((b, idx) => renderBreakRow(b, idx)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px; flex-wrap:wrap;">
+        <input type="text" id="new-break-name" placeholder="名称（例：夕休み）" style="flex:1 1 100%;">
+        <input type="time" id="new-break-start" style="flex:1;">
+        <input type="time" id="new-break-end" style="flex:1;">
+        <button class="btn" id="add-break" data-action="add-break-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>残業の区分開始時刻</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">この時刻を過ぎると、選んでいる工程はそのままに、それ以降の時間は「工程名（${OVERTIME_LABEL}）」として別枠で集計されます（その日1回だけ自動切替）。</div>
+      <div class="row">
+        <input type="time" id="overtime-start-input" value="${escapeHtml(state.data.overtimeStart)}">
+        <button class="btn" data-action="save-overtime-start" style="flex:0 0 auto;">保存</button>
+      </div>
+    </div>
+  `;
+}
+function renderBreakRow(b, idx) {
+  if (state.editingBreakIdx === idx) {
+    return `
+      <div class="master-item" style="flex-wrap:wrap;">
+        <input type="text" id="edit-break-name" value="${escapeHtml(state.editBreakDraft.name)}" style="flex:1 1 100%;">
+        <input type="time" id="edit-break-start" value="${escapeHtml(state.editBreakDraft.start)}" style="flex:1;">
+        <input type="time" id="edit-break-end" value="${escapeHtml(state.editBreakDraft.end)}" style="flex:1;">
+        <button class="btn" data-action="save-break" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-break" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(b.name)}　${escapeHtml(b.start)}〜${escapeHtml(b.end)}</span>
+      <button class="btn" data-action="edit-break" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-break" data-idx="${idx}">削除</button>
+    </div>
+  `;
+}
+function renderProcessRow(p, idx) {
+  if (state.editingProcessIdx === idx) {
+    return `
+      <div class="master-item">
+        <input type="text" id="edit-process-input" value="${escapeHtml(state.editProcessName)}" style="flex:1;">
+        <button class="btn" data-action="save-process-name" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-process" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(p)}</span>
+      <button class="btn" data-action="edit-process" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-process" data-idx="${idx}">削除</button>
+    </div>
+  `;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- event handling: permanent delegated listeners (bound once in init) ----------
+// Binding directly to #app (which itself is never replaced, only its innerHTML)
+// avoids the iOS Safari issue where re-binding onclick on freshly-created elements
+// after every render() can require an extra tap before it registers.
+function bindDelegatedHandlers() {
+  const app = document.getElementById('app');
+
+  app.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-tab],[data-mode],[data-action]');
+    if (!t) return;
+
+    if (t.dataset.tab) { state.tabByMode[state.mode] = t.dataset.tab; render(); return; }
+    if (t.dataset.mode) { state.mode = t.dataset.mode; render(); return; }
+
+    const action = t.dataset.action;
+    switch (action) {
+      case 'save-base': await handleSaveBase(); break;
+      case 'save-cycle': await handleSaveCycle(); break;
+      case 'toggle-stop-reason': {
+        const r = t.dataset.reason;
+        const idx = state.stopReasons.indexOf(r);
+        if (idx === -1) state.stopReasons.push(r); else state.stopReasons.splice(idx, 1);
+        render();
+        break;
+      }
+      case 'clear-order-number': {
+        const m = getMachine(t.dataset.id);
+        m.pendingOrderDigits = '';
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-log-reasons': {
+        const log = state.data.logs.find(l => l.id === t.dataset.id);
+        state.editingLogId = log.id;
+        state.editLogStopReasons = [...(log.stopReasons || (log.stopReason ? [log.stopReason] : []))];
+        render();
+        break;
+      }
+      case 'toggle-edit-log-reason': {
+        const r = t.dataset.reason;
+        const idx = state.editLogStopReasons.indexOf(r);
+        if (idx === -1) state.editLogStopReasons.push(r); else state.editLogStopReasons.splice(idx, 1);
+        render();
+        break;
+      }
+      case 'cancel-edit-log-reasons': state.editingLogId = null; render(); break;
+      case 'save-log-reasons': {
+        const log = state.data.logs.find(l => l.id === t.dataset.id);
+        log.stopReasons = [...state.editLogStopReasons];
+        delete log.stopReason;
+        state.editingLogId = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'add-break-btn': {
+        const name = document.getElementById('new-break-name').value.trim();
+        const start = document.getElementById('new-break-start').value;
+        const end = document.getElementById('new-break-end').value;
+        if (!name || !start || !end) { showToast('名称・開始・終了をすべて入力してください'); return; }
+        state.data.breaks.push({ id: uid(), name, start, end });
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-break': {
+        state.data.breaks.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-break': {
+        const idx = parseInt(t.dataset.idx);
+        const b = state.data.breaks[idx];
+        state.editingBreakIdx = idx;
+        state.editBreakDraft = { name: b.name, start: b.start, end: b.end };
+        render();
+        break;
+      }
+      case 'cancel-edit-break': state.editingBreakIdx = null; render(); break;
+      case 'save-break': {
+        const idx = parseInt(t.dataset.idx);
+        const name = document.getElementById('edit-break-name').value.trim();
+        const start = document.getElementById('edit-break-start').value;
+        const end = document.getElementById('edit-break-end').value;
+        if (!name || !start || !end) { showToast('名称・開始・終了をすべて入力してください'); return; }
+        state.data.breaks[idx] = { ...state.data.breaks[idx], name, start, end };
+        state.editingBreakIdx = null;
+        await saveData();
+        render();
+        break;
+      }
+      case 'save-overtime-start': {
+        const val = document.getElementById('overtime-start-input').value;
+        if (!val) { showToast('時刻を入力してください'); return; }
+        state.data.overtimeStart = val;
+        await saveData();
+        showToast('保存しました');
+        render();
+        break;
+      }
+
+      case 'add-machine-btn': {
+        const inp = document.getElementById('new-machine-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.machines.push({ id: uid(), name, lastReadingMinutes: null, lastReadingDigits: '', lastDate: null, pendingOrderDigits: '' });
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-machine': {
+        state.data.machines = state.data.machines.filter(m => m.id !== t.dataset.id);
+        if (state.selectedMachineId === t.dataset.id) state.selectedMachineId = state.data.machines[0]?.id || null;
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-machine': {
+        const m = getMachine(t.dataset.id);
+        state.editingMachineId = m.id;
+        state.editMachineName = m.name;
+        render();
+        const inp = document.getElementById('edit-machine-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-machine': state.editingMachineId = null; render(); break;
+      case 'save-machine-name': {
+        const name = state.editMachineName.trim();
+        if (!name) return;
+        const m = getMachine(t.dataset.id);
+        m.name = name;
+        state.editingMachineId = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'add-reason-btn': {
+        const inp = document.getElementById('new-reason-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.stopReasons.push(name);
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-reason': {
+        state.data.stopReasons.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-reason': {
+        const idx = parseInt(t.dataset.idx);
+        state.editingReasonIdx = idx;
+        state.editReasonName = state.data.stopReasons[idx];
+        render();
+        const inp = document.getElementById('edit-reason-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-reason': state.editingReasonIdx = null; render(); break;
+      case 'save-reason-name': {
+        const name = state.editReasonName.trim();
+        if (!name) return;
+        const idx = parseInt(t.dataset.idx);
+        state.data.stopReasons[idx] = name;
+        state.editingReasonIdx = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'toggle-date': {
+        const d = t.dataset.date;
+        state.expandedDate = state.expandedDate === d ? null : d;
+        render();
+        break;
+      }
+      case 'export-csv': exportCsv(); break;
+      case 'export-backup':
+        shareOrDownload(JSON.stringify(state.data, null, 2), `machine-log-backup-${todayStr()}.json`, 'application/json');
+        break;
+      case 'import-backup-btn': document.getElementById('import-file-input').click(); break;
+
+      // ---------- process counter ----------
+      case 'add-order': {
+        if (orderNumberDigitCount(state.newOrderDigits) !== 15) return;
+        state.data.activeOrders.push({
+          id: uid(), orderNumber: formatOrderNumber(state.newOrderDigits),
+          currentProcess: null, running: false, lastResumeAt: null, totals: {},
+          onBreak: false, preBreakProcess: null, overtimeSwitchedDate: null, isOvertimeMode: false
+        });
+        state.newOrderDigits = '';
+        await saveData();
+        render();
+        break;
+      }
+      case 'toggle-run': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        if (!order.currentProcess) { showToast('先に工程を選んでください'); return; }
+        if (order.running) {
+          flushOrder(order);
+          order.running = false;
+          order.lastResumeAt = null;
+        } else {
+          state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
+          order.running = true;
+          order.lastResumeAt = Date.now();
+          // if manually starting during a break window, mark onBreak=true so the
+          // auto-pause tick doesn't immediately re-pause this manual override
+          order.onBreak = !!getCurrentBreak();
+          // if starting for the first time after the overtime cutoff, classify immediately
+          const overtimeStartMin = timeStrToMinutes(state.data.overtimeStart || '17:45');
+          if (nowMinutesOfDay() >= overtimeStartMin && order.overtimeSwitchedDate !== todayStr()) {
+            order.isOvertimeMode = true;
+            order.overtimeSwitchedDate = todayStr();
+          }
+        }
+        await saveData();
+        render();
+        break;
+      }
+      case 'select-process': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        const newProcess = t.dataset.process;
+        if (order.currentProcess === newProcess) return;
+        if (order.running) flushOrder(order);
+        order.currentProcess = newProcess;
+        if (order.running) order.lastResumeAt = Date.now();
+        await saveData();
+        render();
+        break;
+      }
+      case 'remove-order': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        if (order && orderTotalSeconds(order) > 0) {
+          if (!confirm('この受注番号にはすでに記録された時間があります。削除すると失われますがよろしいですか？')) return;
+        }
+        state.data.activeOrders = state.data.activeOrders.filter(o => o.id !== t.dataset.id);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-order': {
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        state.editingOrderId = order.id;
+        state.editOrderDigits = order.orderNumber.replace(/-/g, '');
+        render();
+        const inp = document.getElementById('edit-order-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-order': state.editingOrderId = null; render(); break;
+      case 'save-order-number': {
+        if (orderNumberDigitCount(state.editOrderDigits) !== 15) return;
+        const order = state.data.activeOrders.find(o => o.id === t.dataset.id);
+        order.orderNumber = formatOrderNumber(state.editOrderDigits);
+        state.editingOrderId = null;
+        await saveData();
+        render();
+        break;
+      }
+      case 'finalize': {
+        if (!confirm('本日の集計を履歴に保存し、時間をリセットします（受注番号のカードは残ります）。よろしいですか？')) return;
+        const date = todayStr();
+        state.data.activeOrders.forEach(o => {
+          if (o.running) flushOrder(o);
+          Object.entries(o.totals || {}).forEach(([process, seconds]) => {
+            if (seconds > 0) state.data.processLogs.push({ id: uid(), date, orderNumber: o.orderNumber, process, seconds, savedAt: Date.now() });
+          });
+          o.totals = {};
+          o.running = false;
+          o.lastResumeAt = null;
+          o.currentProcess = null;
+          o.isOvertimeMode = false;
+        });
+        await saveData();
+        showToast('集計を保存しました');
+        render();
+        break;
+      }
+      case 'toggle-process-date': {
+        const d = t.dataset.date;
+        state.processHistoryExpandedDate = state.processHistoryExpandedDate === d ? null : d;
+        render();
+        break;
+      }
+      case 'delete-process-date': {
+        if (!confirm(`${fmtDateJp(t.dataset.date)}の工程履歴をすべて削除します。よろしいですか？`)) return;
+        state.data.processLogs = state.data.processLogs.filter(l => l.date !== t.dataset.date);
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'delete-process-log': {
+        if (!confirm('この記録を削除します。よろしいですか？')) return;
+        state.data.processLogs = state.data.processLogs.filter(l => l.id !== t.dataset.id);
+        await saveData();
+        showToast('削除しました');
+        render();
+        break;
+      }
+      case 'clear-all-process-logs': {
+        if (state.data.processLogs.length === 0) return;
+        if (!confirm('工程カウンターの履歴データをすべて削除します。元に戻せません。よろしいですか？')) return;
+        state.data.processLogs = [];
+        await saveData();
+        showToast('全履歴を削除しました');
+        render();
+        break;
+      }
+      case 'export-process-csv': {
+        const rows = [['日付','受注番号','工程','時間(h:mm:ss)','時間(h)']];
+        state.data.processLogs
+          .slice()
+          .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
+          .forEach(l => rows.push([l.date, l.orderNumber, l.process, fmtHM(l.seconds), roundQuarter(l.seconds / 3600)]));
+        const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+        shareOrDownload('\uFEFF' + csv, `process-log-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
+        break;
+      }
+      case 'add-process-btn': {
+        const inp = document.getElementById('new-process-name');
+        const name = inp.value.trim();
+        if (!name) return;
+        state.data.processes.push(name);
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-process': {
+        state.data.processes.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-process': {
+        const idx = parseInt(t.dataset.idx);
+        state.editingProcessIdx = idx;
+        state.editProcessName = state.data.processes[idx];
+        render();
+        const inp = document.getElementById('edit-process-input');
+        if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+        break;
+      }
+      case 'cancel-edit-process': state.editingProcessIdx = null; render(); break;
+      case 'save-process-name': {
+        const name = state.editProcessName.trim();
+        if (!name) return;
+        const idx = parseInt(t.dataset.idx);
+        state.data.processes[idx] = name;
+        state.editingProcessIdx = null;
+        await saveData();
+        render();
+        break;
+      }
+    }
+  });
+
+  app.addEventListener('input', (e) => {
+    const el = e.target;
+    if (el.id === 'base-reading-input') {
+      state.endDigits = el.value.replace(/\D/g, '').slice(0, 9);
+      render();
+      const newEl = document.getElementById('base-reading-input');
+      if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'end-reading-input') {
+      state.endDigits = el.value.replace(/\D/g, '').slice(0, 9);
+      render();
+      const newEl = document.getElementById('end-reading-input');
+      if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'order-number-input') {
+      const machine = getMachine(state.selectedMachineId);
+      const digits = el.value.replace(/\D/g, '').slice(0, 15);
+      machine.pendingOrderDigits = digits;
+      const formatted = formatOrderNumber(digits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      saveData();
+      const btn = document.getElementById('save-cycle-btn');
+      if (btn) btn.disabled = !(orderNumberDigitCount(machine.pendingOrderDigits) === 15 && digitsToMinutes(state.endDigits) !== null);
+    } else if (el.id === 'edit-machine-input') {
+      state.editMachineName = el.value;
+    } else if (el.id === 'edit-reason-input') {
+      state.editReasonName = el.value;
+    } else if (el.id === 'edit-process-input') {
+      state.editProcessName = el.value;
+    } else if (el.id === 'new-order-input') {
+      state.newOrderDigits = el.value.replace(/\D/g, '').slice(0, 15);
+      const formatted = formatOrderNumber(state.newOrderDigits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      const btn = document.getElementById('add-order-btn');
+      if (btn) btn.disabled = orderNumberDigitCount(state.newOrderDigits) !== 15;
+    } else if (el.id === 'edit-order-input') {
+      state.editOrderDigits = el.value.replace(/\D/g, '').slice(0, 15);
+      const formatted = formatOrderNumber(state.editOrderDigits);
+      el.value = formatted;
+      const pos = formatted.length;
+      requestAnimationFrame(() => el.setSelectionRange(pos, pos));
+      const btn = app.querySelector('[data-action="save-order-number"]');
+      if (btn) btn.disabled = orderNumberDigitCount(state.editOrderDigits) !== 15;
+    }
+  });
+
+  app.addEventListener('change', async (e) => {
+    const el = e.target;
+    if (el.id === 'machine-select') {
+      state.selectedMachineId = el.value;
+      state.endDigits = '';
+      state.stopReasons = [];
+      render();
+    } else if (el.id === 'history-filter') {
+      state.historyFilterMachine = el.value;
+      render();
+    } else if (el.id === 'import-file-input') {
+      const file = el.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const parsed = JSON.parse(text);
+        if (!parsed.machines || !parsed.stopReasons || !parsed.logs) throw new Error('形式が不正です');
+        if (!confirm('現在のデータを上書きして復元します。よろしいですか？')) return;
+        state.data = parsed;
+        if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
+        if (!state.data.activeOrders) state.data.activeOrders = [];
+        if (!state.data.processLogs) state.data.processLogs = [];
+        if (!state.data.breaks) state.data.breaks = [
+          { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+          { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
+          { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
+        ];
+        if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
+        await saveData();
+        showToast('復元しました');
+        render();
+      } catch (err) {
+        alert('読み込みに失敗しました: ' + err.message);
+      }
+      el.value = '';
+    }
+  });
+}
+
+// accumulate a running order's elapsed time into its totals (called before pausing/switching)
+function flushOrder(order) {
+  if (order.running && order.lastResumeAt && order.currentProcess) {
+    const elapsed = (Date.now() - order.lastResumeAt) / 1000;
+    const key = effectiveBucketKey(order);
+    order.totals[key] = (order.totals[key] || 0) + elapsed;
+  }
+  order.lastResumeAt = Date.now();
+}
+
+// ---------- break-time auto pause/resume (昼休み・中休みなど) ----------
+function nowMinutesOfDay() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+function timeStrToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+function getCurrentBreak() {
+  if (!state.data || !state.data.breaks) return null;
+  const nowMin = nowMinutesOfDay();
+  return state.data.breaks.find(b => {
+    const s = timeStrToMinutes(b.start), e = timeStrToMinutes(b.end);
+    return nowMin >= s && nowMin < e;
+  }) || null;
+}
+async function checkBreaksAndAutoSwitch() {
+  if (!state.data || !state.data.activeOrders || state.data.activeOrders.length === 0) return;
+  const onBreakNow = !!getCurrentBreak();
+  let changed = false;
+
+  state.data.activeOrders.forEach(o => {
+    if (onBreakNow) {
+      if (o.running && !o.onBreak) {
+        flushOrder(o);
+        o.preBreakProcess = o.currentProcess;
+        o.running = false;
+        o.lastResumeAt = null;
+        o.onBreak = true;
+        changed = true;
+      }
+    } else {
+      if (o.onBreak) {
+        o.onBreak = false;
+        o.currentProcess = o.preBreakProcess || o.currentProcess;
+        o.preBreakProcess = null;
+        o.running = true;
+        o.lastResumeAt = Date.now();
+        changed = true;
+      }
+    }
+  });
+
+  if (changed) {
+    await saveData();
+    render();
+  }
+}
+
+// ---------- overtime auto-switch (17:45〜 default, editable) ----------
+async function checkOvertimeAutoSwitch() {
+  if (!state.data || !state.data.activeOrders || state.data.activeOrders.length === 0) return;
+  const overtimeStartMin = timeStrToMinutes(state.data.overtimeStart || '17:45');
+  const isOvertimeNow = nowMinutesOfDay() >= overtimeStartMin;
+  if (!isOvertimeNow) return;
+  const today = todayStr();
+  let changed = false;
+
+  state.data.activeOrders.forEach(o => {
+    if (o.running && !o.onBreak && o.overtimeSwitchedDate !== today && !o.isOvertimeMode) {
+      flushOrder(o); // closes out the regular-hours bucket for the current process, up to now
+      o.isOvertimeMode = true;
+      o.overtimeSwitchedDate = today;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    await saveData();
+    render();
+  }
+}
+
+// lightweight per-second refresh of visible timers without a full re-render
+setInterval(async () => {
+  await checkBreaksAndAutoSwitch();
+  await checkOvertimeAutoSwitch();
+  if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
+  const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
+  if (!anyRunning) return;
+  state.data.activeOrders.forEach(o => {
+    const totalEl = document.querySelector(`[data-timer-total="${o.id}"]`);
+    if (totalEl) totalEl.innerHTML = fmtDualTime(orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0));
+    if (o.running && o.currentProcess) {
+      const key = effectiveBucketKey(o);
+      const procEl = document.querySelector(`[data-timer-proc="${o.id}:${key}"]`);
+      if (procEl) procEl.innerHTML = fmtDualTime(orderCurrentDisplaySeconds(o, key));
+    }
+  });
+}, 1000);
+
+async function handleSaveBase() {
+  const machine = getMachine(state.selectedMachineId);
+  const minutes = digitsToMinutes(state.endDigits);
+  if (minutes === null) return;
+  machine.lastReadingMinutes = minutes;
+  machine.lastReadingDigits = state.endDigits;
+  machine.lastDate = todayStr();
+  machine.pendingOrderDigits = '';
+  await saveData();
+  state.endDigits = '';
+  showToast('基準として保存しました');
+  render();
+}
+
+async function handleSaveCycle() {
+  const machine = getMachine(state.selectedMachineId);
+  const endMinutes = digitsToMinutes(state.endDigits);
+  const orderComplete = orderNumberDigitCount(machine.pendingOrderDigits) === 15;
+  if (endMinutes === null || !orderComplete) return;
+
+  const rawElapsedHours = Math.max(0, endMinutes - machine.lastReadingMinutes) / 60;
+  const elapsed = roundQuarter(rawElapsedHours);
+  const log = {
+    id: uid(),
+    date: todayStr(),
+    machineId: machine.id,
+    startMinutes: machine.lastReadingMinutes,
+    endMinutes: endMinutes,
+    elapsedHours: elapsed,
+    rawElapsedHours: rawElapsedHours,
+    orderNumber: formatOrderNumber(machine.pendingOrderDigits),
+    stopReasons: [...state.stopReasons],
+    savedAt: Date.now()
+  };
+  state.data.logs.push(log);
+  machine.lastReadingMinutes = endMinutes;
+  machine.lastReadingDigits = state.endDigits;
+  machine.lastDate = todayStr();
+  await saveData();
+  state.endDigits = '';
+  state.stopReasons = [];
+  showToast('記録を保存しました');
+  render();
+}
+
+function exportCsv() {
+  const rows = [['日付','機械','受注番号','停止理由','経過時間(h)','丸め前経過時間(h)','開始値','終了値']];
+  state.data.logs
+    .slice()
+    .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
+    .forEach(l => {
+      const machine = getMachine(l.machineId);
+      const reasons = l.stopReasons || (l.stopReason ? [l.stopReason] : []);
+      rows.push([
+        l.date, machine?.name || '', l.orderNumber, reasons.join(' / '),
+        l.elapsedHours, (l.rawElapsedHours !== undefined ? Math.round(l.rawElapsedHours * 100) / 100 : ''),
+        minutesToDisplay(l.startMinutes), minutesToDisplay(l.endMinutes)
+      ]);
+    });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  shareOrDownload('\uFEFF' + csv, `machine-log-${todayStr()}.csv`, 'text/csv;charset=utf-8;');
+}
+
+(async function init() {
+  bindDelegatedHandlers();
+  await loadData();
+  render();
+})();
+</script>
+</body>
+</html>
