@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.10</title>
+<title>稼働ログ v1.11</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -329,7 +329,11 @@ function defaultData() {
     logs: [],
     processes: ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'],
     activeOrders: [],
-    processLogs: []
+    processLogs: [],
+    breaks: [
+      { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+      { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
+    ]
   };
 }
 
@@ -354,7 +358,9 @@ let state = {
   editingOrderId: null,
   editOrderDigits: '',
   editingLogId: null,
-  editLogStopReasons: []
+  editLogStopReasons: [],
+  editingBreakIdx: null,
+  editBreakDraft: { name: '', start: '', end: '' }
 };
 
 async function loadData() {
@@ -367,6 +373,10 @@ async function loadData() {
   // backward compatibility for data saved before the process-counter feature existed
   if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
   if (!state.data.activeOrders) state.data.activeOrders = [];
+  if (!state.data.breaks) state.data.breaks = [
+    { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+    { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
+  ];
   if (!state.data.processLogs) state.data.processLogs = [];
   if (!state.selectedMachineId && state.data.machines.length) {
     state.selectedMachineId = state.data.machines[0].id;
@@ -406,7 +416,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.10</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.11</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -741,10 +751,11 @@ function renderOrderCard(o, processes) {
         <span class="order-no">${escapeHtml(o.orderNumber)}</span>
         <button class="play-btn" data-action="toggle-run" data-id="${o.id}">${o.running ? '⏸' : '▶'}</button>
       </div>
+      ${o.onBreak ? `<div class="stop-chip" style="margin-bottom:8px;">☕ 休憩中（自動で一時停止・終了後に自動再開します）</div>` : ''}
       <div class="process-chips">
         ${processes.map(p => `<button class="process-chip ${o.currentProcess === p ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join('')}
       </div>
-      <div class="order-timer-label">${o.currentProcess ? escapeHtml(o.currentProcess) + ' 作業中の合計' : '工程を選択してください'}</div>
+      <div class="order-timer-label">${o.currentProcess ? '案件の本日の作業時間合計' : '工程を選択してください'}</div>
       <div class="order-timer" data-timer-total="${o.id}">${fmtDualTime(total)}</div>
       ${Object.keys(o.totals || {}).length > 0 ? `
         <div class="process-breakdown">
@@ -872,6 +883,37 @@ function renderProcessMasterTab() {
         <button class="btn" id="add-process" data-action="add-process-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
+    <div class="panel">
+      <h2>休憩時間一覧</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">この時間になると、動いている工程カウンターは自動で一時停止し、終了後に自動で再開します。</div>
+      ${state.data.breaks.map((b, idx) => renderBreakRow(b, idx)).join('') || '<div class="empty">登録なし</div>'}
+      <div class="add-row" style="margin-top:10px; flex-wrap:wrap;">
+        <input type="text" id="new-break-name" placeholder="名称（例：夕休み）" style="flex:1 1 100%;">
+        <input type="time" id="new-break-start" style="flex:1;">
+        <input type="time" id="new-break-end" style="flex:1;">
+        <button class="btn" id="add-break" data-action="add-break-btn" style="flex:0 0 auto;">追加</button>
+      </div>
+    </div>
+  `;
+}
+function renderBreakRow(b, idx) {
+  if (state.editingBreakIdx === idx) {
+    return `
+      <div class="master-item" style="flex-wrap:wrap;">
+        <input type="text" id="edit-break-name" value="${escapeHtml(state.editBreakDraft.name)}" style="flex:1 1 100%;">
+        <input type="time" id="edit-break-start" value="${escapeHtml(state.editBreakDraft.start)}" style="flex:1;">
+        <input type="time" id="edit-break-end" value="${escapeHtml(state.editBreakDraft.end)}" style="flex:1;">
+        <button class="btn" data-action="save-break" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
+        <button class="btn-danger" data-action="cancel-edit-break" style="flex:0 0 auto;">取消</button>
+      </div>
+    `;
+  }
+  return `
+    <div class="master-item">
+      <span>${escapeHtml(b.name)}　${escapeHtml(b.start)}〜${escapeHtml(b.end)}</span>
+      <button class="btn" data-action="edit-break" data-idx="${idx}" style="flex:0 0 auto;">編集</button>
+      <button class="btn-danger" data-action="delete-break" data-idx="${idx}">削除</button>
+    </div>
   `;
 }
 function renderProcessRow(p, idx) {
@@ -949,6 +991,44 @@ function bindDelegatedHandlers() {
         log.stopReasons = [...state.editLogStopReasons];
         delete log.stopReason;
         state.editingLogId = null;
+        await saveData();
+        render();
+        break;
+      }
+
+      case 'add-break-btn': {
+        const name = document.getElementById('new-break-name').value.trim();
+        const start = document.getElementById('new-break-start').value;
+        const end = document.getElementById('new-break-end').value;
+        if (!name || !start || !end) { showToast('名称・開始・終了をすべて入力してください'); return; }
+        state.data.breaks.push({ id: uid(), name, start, end });
+        await saveData();
+        render();
+        break;
+      }
+      case 'delete-break': {
+        state.data.breaks.splice(parseInt(t.dataset.idx), 1);
+        await saveData();
+        render();
+        break;
+      }
+      case 'edit-break': {
+        const idx = parseInt(t.dataset.idx);
+        const b = state.data.breaks[idx];
+        state.editingBreakIdx = idx;
+        state.editBreakDraft = { name: b.name, start: b.start, end: b.end };
+        render();
+        break;
+      }
+      case 'cancel-edit-break': state.editingBreakIdx = null; render(); break;
+      case 'save-break': {
+        const idx = parseInt(t.dataset.idx);
+        const name = document.getElementById('edit-break-name').value.trim();
+        const start = document.getElementById('edit-break-start').value;
+        const end = document.getElementById('edit-break-end').value;
+        if (!name || !start || !end) { showToast('名称・開始・終了をすべて入力してください'); return; }
+        state.data.breaks[idx] = { ...state.data.breaks[idx], name, start, end };
+        state.editingBreakIdx = null;
         await saveData();
         render();
         break;
@@ -1044,7 +1124,8 @@ function bindDelegatedHandlers() {
         if (orderNumberDigitCount(state.newOrderDigits) !== 15) return;
         state.data.activeOrders.push({
           id: uid(), orderNumber: formatOrderNumber(state.newOrderDigits),
-          currentProcess: null, running: false, lastResumeAt: null, totals: {}
+          currentProcess: null, running: false, lastResumeAt: null, totals: {},
+          onBreak: false, preBreakProcess: null
         });
         state.newOrderDigits = '';
         await saveData();
@@ -1062,6 +1143,9 @@ function bindDelegatedHandlers() {
           state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
           order.running = true;
           order.lastResumeAt = Date.now();
+          // if manually starting during a break window, mark onBreak=true so the
+          // auto-pause tick doesn't immediately re-pause this manual override
+          order.onBreak = !!getCurrentBreak();
         }
         await saveData();
         render();
@@ -1274,6 +1358,10 @@ function bindDelegatedHandlers() {
         if (!state.data.processes) state.data.processes = ['CAD/CAM', '段取り', '工程内検査', 'プログラム作成', 'その他'];
         if (!state.data.activeOrders) state.data.activeOrders = [];
         if (!state.data.processLogs) state.data.processLogs = [];
+        if (!state.data.breaks) state.data.breaks = [
+          { id: uid(), name: '昼休み', start: '12:00', end: '12:50' },
+          { id: uid(), name: '中休み', start: '15:00', end: '15:10' }
+        ];
         await saveData();
         showToast('復元しました');
         render();
@@ -1294,8 +1382,59 @@ function flushOrder(order) {
   order.lastResumeAt = Date.now();
 }
 
+// ---------- break-time auto pause/resume (昼休み・中休みなど) ----------
+function nowMinutesOfDay() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+function timeStrToMinutes(hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+function getCurrentBreak() {
+  if (!state.data || !state.data.breaks) return null;
+  const nowMin = nowMinutesOfDay();
+  return state.data.breaks.find(b => {
+    const s = timeStrToMinutes(b.start), e = timeStrToMinutes(b.end);
+    return nowMin >= s && nowMin < e;
+  }) || null;
+}
+async function checkBreaksAndAutoSwitch() {
+  if (!state.data || !state.data.activeOrders || state.data.activeOrders.length === 0) return;
+  const onBreakNow = !!getCurrentBreak();
+  let changed = false;
+
+  state.data.activeOrders.forEach(o => {
+    if (onBreakNow) {
+      if (o.running && !o.onBreak) {
+        flushOrder(o);
+        o.preBreakProcess = o.currentProcess;
+        o.running = false;
+        o.lastResumeAt = null;
+        o.onBreak = true;
+        changed = true;
+      }
+    } else {
+      if (o.onBreak) {
+        o.onBreak = false;
+        o.currentProcess = o.preBreakProcess || o.currentProcess;
+        o.preBreakProcess = null;
+        o.running = true;
+        o.lastResumeAt = Date.now();
+        changed = true;
+      }
+    }
+  });
+
+  if (changed) {
+    await saveData();
+    render();
+  }
+}
+
 // lightweight per-second refresh of visible timers without a full re-render
-setInterval(() => {
+setInterval(async () => {
+  await checkBreaksAndAutoSwitch();
   if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
   const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
   if (!anyRunning) return;
