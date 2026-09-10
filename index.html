@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.11</title>
+<title>稼働ログ v1.12</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -416,7 +416,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.11</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.12</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -682,7 +682,8 @@ function fmtHM(totalSeconds) {
   const s = Math.max(0, Math.round(totalSeconds));
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
-  return `${h}:${String(m).padStart(2, '0')}`;
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 function fmtHoursQuarter(totalSeconds) {
   return fmtHours(roundQuarter(Math.max(0, totalSeconds) / 3600)) + 'h';
@@ -1241,7 +1242,7 @@ function bindDelegatedHandlers() {
         break;
       }
       case 'export-process-csv': {
-        const rows = [['日付','受注番号','工程','時間(h:mm)','時間(h)']];
+        const rows = [['日付','受注番号','工程','時間(h:mm:ss)','時間(h)']];
         state.data.processLogs
           .slice()
           .sort((a,b) => a.date.localeCompare(b.date) || a.savedAt - b.savedAt)
