@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.17</title>
+<title>稼働ログ v1.18</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -340,7 +340,8 @@ function defaultData() {
       { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
       { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
     ],
-    overtimeStart: '17:45'
+    dayShiftStart: '08:30',
+    dayShiftEnd: '17:30'
   };
 }
 
@@ -386,7 +387,8 @@ async function loadData() {
     { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
     { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
   ];
-  if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
+  if (!state.data.dayShiftStart) state.data.dayShiftStart = '08:30';
+  if (!state.data.dayShiftEnd) state.data.dayShiftEnd = '17:30';
   if (!state.data.processLogs) state.data.processLogs = [];
   if (!state.selectedMachineId && state.data.machines.length) {
     state.selectedMachineId = state.data.machines[0].id;
@@ -426,7 +428,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.17</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.18</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -707,13 +709,19 @@ function orderTotalSeconds(order) {
 // the totals dict key currently being accumulated: plain process name normally,
 // or "工程名（残業）" once this order has crossed into overtime for the day —
 // this keeps the process itself unchanged while separating overtime hours
+function isDayShiftNow() {
+  const start = timeStrToMinutes(state.data.dayShiftStart || '08:30');
+  const end = timeStrToMinutes(state.data.dayShiftEnd || '17:30');
+  const now = nowMinutesOfDay();
+  return now >= start && now < end;
+}
 function effectiveBucketKey(order) {
   if (!order.currentProcess) return null;
-  return order.isOvertimeMode ? `${order.currentProcess}${OVERTIME_SUFFIX}` : order.currentProcess;
+  return isDayShiftNow() ? order.currentProcess : `${order.currentProcess}${OVERTIME_SUFFIX}`;
 }
 function orderCurrentDisplaySeconds(order, bucketKey) {
   const base = (order.totals && order.totals[bucketKey]) || 0;
-  if (order.running && effectiveBucketKey(order) === bucketKey && order.lastResumeAt) {
+  if (order.running && order.activeBucketKey === bucketKey && order.lastResumeAt) {
     return base + (Date.now() - order.lastResumeAt) / 1000;
   }
   return base;
@@ -817,7 +825,7 @@ function renderOrderCard(o, processes) {
         <button class="play-btn" data-action="toggle-run" data-id="${o.id}">${o.running ? '⏸' : '▶'}</button>
       </div>
       ${o.onBreak ? `<div class="stop-chip" style="margin-bottom:8px;">☕ 休憩中（自動で一時停止・終了後に自動再開します）</div>` : ''}
-      ${o.isOvertimeMode ? `<div class="stop-chip" style="margin-bottom:8px;">🌙 残業時間中（工程はそのまま・時間だけ区分して集計）</div>` : ''}
+      ${o.activeBucketKey && isOvertimeKey(o.activeBucketKey) ? `<div class="stop-chip" style="margin-bottom:8px;">🌙 残業時間中（工程はそのまま・時間だけ区分して集計）</div>` : ''}
       <div class="process-chips">
         ${processes.map(p => `<button class="process-chip ${o.currentProcess === p ? 'selected' : ''}" data-action="select-process" data-id="${o.id}" data-process="${escapeHtml(p)}">${escapeHtml(p)}</button>`).join('')}
       </div>
@@ -965,11 +973,13 @@ function renderProcessMasterTab() {
       </div>
     </div>
     <div class="panel">
-      <h2>残業の区分開始時刻</h2>
-      <div class="stat" style="display:block; margin-bottom:8px;">この時刻を過ぎると、選んでいる工程はそのままに、それ以降の時間は「工程名（${OVERTIME_LABEL}）」として別枠で集計されます（その日1回だけ自動切替）。</div>
+      <h2>日勤の時間帯</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">この時間帯を外れた分は、選んでいる工程はそのままに「工程名（${OVERTIME_LABEL}）」として自動的に別枠で集計されます（開始時に応じてリアルタイムに切り替わります）。</div>
       <div class="row">
-        <input type="time" id="overtime-start-input" value="${escapeHtml(state.data.overtimeStart)}">
-        <button class="btn" data-action="save-overtime-start" style="flex:0 0 auto;">保存</button>
+        <input type="time" id="dayshift-start-input" value="${escapeHtml(state.data.dayShiftStart)}">
+        <span style="flex:0 0 auto; align-self:center; color:var(--muted);">〜</span>
+        <input type="time" id="dayshift-end-input" value="${escapeHtml(state.data.dayShiftEnd)}">
+        <button class="btn" data-action="save-dayshift-times" style="flex:0 0 auto;">保存</button>
       </div>
     </div>
   `;
@@ -1111,10 +1121,12 @@ function bindDelegatedHandlers() {
         render();
         break;
       }
-      case 'save-overtime-start': {
-        const val = document.getElementById('overtime-start-input').value;
-        if (!val) { showToast('時刻を入力してください'); return; }
-        state.data.overtimeStart = val;
+      case 'save-dayshift-times': {
+        const start = document.getElementById('dayshift-start-input').value;
+        const end = document.getElementById('dayshift-end-input').value;
+        if (!start || !end) { showToast('開始・終了の両方を入力してください'); return; }
+        state.data.dayShiftStart = start;
+        state.data.dayShiftEnd = end;
         await saveData();
         showToast('保存しました');
         render();
@@ -1212,7 +1224,7 @@ function bindDelegatedHandlers() {
         state.data.activeOrders.push({
           id: uid(), orderNumber: formatOrderNumber(state.newOrderDigits),
           currentProcess: null, running: false, lastResumeAt: null, totals: {},
-          onBreak: false, preBreakProcess: null, overtimeSwitchedDate: null, isOvertimeMode: false
+          onBreak: false, preBreakProcess: null, activeBucketKey: null
         });
         state.newOrderDigits = '';
         await saveData();
@@ -1230,15 +1242,10 @@ function bindDelegatedHandlers() {
           state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
           order.running = true;
           order.lastResumeAt = Date.now();
+          order.activeBucketKey = effectiveBucketKey(order);
           // if manually starting during a break window, mark onBreak=true so the
           // auto-pause tick doesn't immediately re-pause this manual override
           order.onBreak = !!getCurrentBreak();
-          // if starting for the first time after the overtime cutoff, classify immediately
-          const overtimeStartMin = timeStrToMinutes(state.data.overtimeStart || '17:45');
-          if (nowMinutesOfDay() >= overtimeStartMin && order.overtimeSwitchedDate !== todayStr()) {
-            order.isOvertimeMode = true;
-            order.overtimeSwitchedDate = todayStr();
-          }
         }
         await saveData();
         render();
@@ -1250,7 +1257,10 @@ function bindDelegatedHandlers() {
         if (order.currentProcess === newProcess) return;
         if (order.running) flushOrder(order);
         order.currentProcess = newProcess;
-        if (order.running) order.lastResumeAt = Date.now();
+        if (order.running) {
+          order.lastResumeAt = Date.now();
+          order.activeBucketKey = effectiveBucketKey(order);
+        }
         await saveData();
         render();
         break;
@@ -1298,7 +1308,7 @@ function bindDelegatedHandlers() {
           o.running = false;
           o.lastResumeAt = null;
           o.currentProcess = null;
-          o.isOvertimeMode = false;
+          o.activeBucketKey = null;
         });
         state.showDailySummary = false;
         await saveData();
@@ -1460,7 +1470,8 @@ function bindDelegatedHandlers() {
           { id: uid(), name: '中休み', start: '15:00', end: '15:10' },
           { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
         ];
-        if (!state.data.overtimeStart) state.data.overtimeStart = '17:45';
+        if (!state.data.dayShiftStart) state.data.dayShiftStart = '08:30';
+  if (!state.data.dayShiftEnd) state.data.dayShiftEnd = '17:30';
         await saveData();
         showToast('復元しました');
         render();
@@ -1474,9 +1485,9 @@ function bindDelegatedHandlers() {
 
 // accumulate a running order's elapsed time into its totals (called before pausing/switching)
 function flushOrder(order) {
-  if (order.running && order.lastResumeAt && order.currentProcess) {
+  if (order.running && order.lastResumeAt && order.activeBucketKey) {
     const elapsed = (Date.now() - order.lastResumeAt) / 1000;
-    const key = effectiveBucketKey(order);
+    const key = order.activeBucketKey;
     order.totals[key] = (order.totals[key] || 0) + elapsed;
   }
   order.lastResumeAt = Date.now();
@@ -1521,6 +1532,7 @@ async function checkBreaksAndAutoSwitch() {
         o.preBreakProcess = null;
         o.running = true;
         o.lastResumeAt = Date.now();
+        o.activeBucketKey = effectiveBucketKey(o);
         changed = true;
       }
     }
@@ -1533,19 +1545,21 @@ async function checkBreaksAndAutoSwitch() {
 }
 
 // ---------- overtime auto-switch (17:45〜 default, editable) ----------
-async function checkOvertimeAutoSwitch() {
+// ---------- day-shift / overtime boundary watcher ----------
+// runs continuously (not a one-shot flag): whenever a running order's effective
+// bucket (process + day-shift-vs-overtime) changes underneath it, split the time
+// precisely at that moment so the totals stay correctly attributed either way,
+// even across a finalize + restart within the same day.
+async function checkShiftBoundaryAutoSplit() {
   if (!state.data || !state.data.activeOrders || state.data.activeOrders.length === 0) return;
-  const overtimeStartMin = timeStrToMinutes(state.data.overtimeStart || '17:45');
-  const isOvertimeNow = nowMinutesOfDay() >= overtimeStartMin;
-  if (!isOvertimeNow) return;
-  const today = todayStr();
   let changed = false;
 
   state.data.activeOrders.forEach(o => {
-    if (o.running && !o.onBreak && o.overtimeSwitchedDate !== today && !o.isOvertimeMode) {
-      flushOrder(o); // closes out the regular-hours bucket for the current process, up to now
-      o.isOvertimeMode = true;
-      o.overtimeSwitchedDate = today;
+    if (!o.running || o.onBreak || !o.currentProcess) return;
+    const freshKey = effectiveBucketKey(o);
+    if (o.activeBucketKey !== freshKey) {
+      flushOrder(o); // closes out whatever was accumulating under the OLD key, up to now
+      o.activeBucketKey = freshKey;
       changed = true;
     }
   });
@@ -1559,7 +1573,7 @@ async function checkOvertimeAutoSwitch() {
 // lightweight per-second refresh of visible timers without a full re-render
 setInterval(async () => {
   await checkBreaksAndAutoSwitch();
-  await checkOvertimeAutoSwitch();
+  await checkShiftBoundaryAutoSplit();
   if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
   const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
   if (!anyRunning) return;
@@ -1567,7 +1581,7 @@ setInterval(async () => {
     const totalEl = document.querySelector(`[data-timer-total="${o.id}"]`);
     if (totalEl) totalEl.innerHTML = fmtDualTime(orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0));
     if (o.running && o.currentProcess) {
-      const key = effectiveBucketKey(o);
+      const key = o.activeBucketKey;
       const procEl = document.querySelector(`[data-timer-proc="${o.id}:${key}"]`);
       if (procEl) procEl.innerHTML = fmtDualTime(orderCurrentDisplaySeconds(o, key));
     }
