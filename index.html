@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.22</title>
+<title>稼働ログ v1.23</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -92,6 +92,7 @@
     font-weight: 600;
   }
   .btn:active { background: var(--cyan-dim); }
+  .btn:disabled { color: var(--muted); border-color: var(--border); }
   .btn-primary {
     background: var(--cyan);
     color: #04202a;
@@ -187,7 +188,7 @@
   .master-item span { flex: 1; font-size: 0.9rem; }
   .add-row { display: flex; gap: 8px; margin-bottom: 4px; }
   .toast {
-    position: fixed; bottom: 76px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: calc(150px + env(safe-area-inset-bottom, 0px)); left: 50%; z-index: 30; transform: translateX(-50%);
     background: var(--cyan); color: #04202a; font-weight: 700;
     padding: 9px 18px; border-radius: 20px; font-size: 0.85rem;
     opacity: 0; pointer-events: none; transition: opacity .25s; white-space: nowrap;
@@ -437,7 +438,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.22</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.23</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -1031,14 +1032,14 @@ function renderProcessMasterTab() {
         <button class="btn" id="add-break" data-action="add-break-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
-    <div class="panel">
+    <div class="panel" data-save-group>
       <h2>日勤の時間帯</h2>
       <div class="stat" style="display:block; margin-bottom:8px;">この時間帯を外れた分は、選んでいる工程はそのままに「工程名（${OVERTIME_LABEL}）」として自動的に別枠で集計されます（開始時に応じてリアルタイムに切り替わります）。</div>
       <div class="row">
         <input type="time" id="dayshift-start-input" value="${escapeHtml(state.data.dayShiftStart)}">
         <span style="flex:0 0 auto; align-self:center; color:var(--muted);">〜</span>
         <input type="time" id="dayshift-end-input" value="${escapeHtml(state.data.dayShiftEnd)}">
-        <button class="btn" data-action="save-dayshift-times" style="flex:0 0 auto;">保存</button>
+        <button class="btn" data-action="save-dayshift-times" data-save-btn style="flex:0 0 auto;" disabled>保存済み</button>
       </div>
     </div>
     ${renderAutoSettingsPanel()}
@@ -1047,7 +1048,7 @@ function renderProcessMasterTab() {
 function renderAutoSettingsPanel() {
   const a = state.data.autoStart;
   return `
-    <div class="panel">
+    <div class="panel" data-save-group>
       <h2>始業・終業の自動設定</h2>
       <div class="stat" style="display:block; margin-bottom:8px;">始業時刻になると、セットした受注番号・工程で自動的にカウントを始めます（始業から${AUTO_START_GRACE_MIN}分以内にアプリを開けば、始業時刻にさかのぼって開始）。終業時刻になると、動いているカウンターを止めます（アプリを閉じていても、次に開いた時に終業時刻で締めます）。空欄にした機能はオフになります。</div>
       <div class="field">
@@ -1069,7 +1070,7 @@ function renderAutoSettingsPanel() {
         <label>終業時刻</label>
         <input type="time" id="auto-stop-time" value="${escapeHtml(state.data.autoStopTime)}">
       </div>
-      <button class="btn-primary" data-action="save-auto-settings">保存</button>
+      <button class="btn-primary" data-action="save-auto-settings" data-save-btn disabled>保存済み ✓</button>
     </div>
   `;
 }
@@ -1570,6 +1571,15 @@ function bindDelegatedHandlers() {
       }
     }
   });
+
+  // any edit inside a save group re-enables its save button
+  const markDirty = (el) => {
+    const g = el.closest && el.closest('[data-save-group]');
+    const b = g && g.querySelector('[data-save-btn]');
+    if (b && b.disabled) { b.disabled = false; b.textContent = '保存'; }
+  };
+  app.addEventListener('input', (e) => { markDirty(e.target); });
+  app.addEventListener('change', (e) => { markDirty(e.target); });
 
   app.addEventListener('input', (e) => {
     const el = e.target;
