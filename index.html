@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.20</title>
+<title>稼働ログ v1.22</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -341,7 +341,11 @@ function defaultData() {
       { id: uid(), name: '夕休み', start: '17:30', end: '17:45' }
     ],
     dayShiftStart: '08:30',
-    dayShiftEnd: '17:30'
+    dayShiftEnd: '17:30',
+    autoStart: { time: '08:30', orderNumber: '', process: '' },
+    autoStopTime: '',
+    autoStartDoneDate: null,
+    autoStopDoneDate: null
   };
 }
 
@@ -392,6 +396,8 @@ async function loadData() {
   ];
   if (!state.data.dayShiftStart) state.data.dayShiftStart = '08:30';
   if (!state.data.dayShiftEnd) state.data.dayShiftEnd = '17:30';
+  if (!state.data.autoStart) state.data.autoStart = { time: '08:30', orderNumber: '', process: '' };
+  if (state.data.autoStopTime === undefined) state.data.autoStopTime = '';
   if (!state.data.processLogs) state.data.processLogs = [];
   if (!state.selectedMachineId && state.data.machines.length) {
     state.selectedMachineId = state.data.machines[0].id;
@@ -431,7 +437,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.20</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.22</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -748,16 +754,13 @@ function effectiveBucketKey(order) {
 }
 function orderCurrentDisplaySeconds(order, bucketKey) {
   const base = (order.totals && order.totals[bucketKey]) || 0;
-  if (order.running && order.activeBucketKey === bucketKey && order.lastResumeAt) {
-    return base + (Date.now() - order.lastResumeAt) / 1000;
-  }
-  return base;
+  return base + (pendingBuckets(order, Date.now())[bucketKey] || 0);
 }
 
 function renderProcessRecordTab() {
   const processes = state.data.processes;
   const orders = state.data.activeOrders;
-  const grandTotal = orders.reduce((s, o) => s + orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0), 0);
+  const grandTotal = orders.reduce((s, o) => s + orderLiveTotalSeconds(o), 0);
 
   if (state.showDailySummary) {
     return `
@@ -806,7 +809,10 @@ function renderOrderSummaryCard(o) {
 }
 
 function renderOrderBreakdown(o) {
-  const entries = Object.entries(o.totals).filter(([, v]) => v > 0);
+  const liveTotals = { ...(o.totals || {}) };
+  Object.keys(pendingBuckets(o, Date.now())).forEach(k => { if (!(k in liveTotals)) liveTotals[k] = 0; });
+  if (o.running && o.activeBucketKey && !(o.activeBucketKey in liveTotals)) liveTotals[o.activeBucketKey] = 0;
+  const entries = Object.entries(liveTotals).filter(([k, v]) => v > 0 || (o.running && k === o.activeBucketKey));
   const dayEntries = entries.filter(([k]) => !isOvertimeKey(k));
   const otEntries = entries.filter(([k]) => isOvertimeKey(k));
   if (dayEntries.length === 0 && otEntries.length === 0) return '';
@@ -844,7 +850,7 @@ function renderOrderCard(o, processes) {
       </div>
     `;
   }
-  const total = orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0);
+  const total = orderLiveTotalSeconds(o);
   return `
     <div class="order-card ${o.running ? 'running' : ''}">
       <div class="order-card-head">
@@ -858,7 +864,7 @@ function renderOrderCard(o, processes) {
       </div>
       <div class="order-timer-label">${o.currentProcess ? '案件の本日の作業時間合計' : '工程を選択してください'}</div>
       <div class="order-timer" data-timer-total="${o.id}">${fmtDualTime(total)}</div>
-      ${Object.keys(o.totals || {}).length > 0 ? renderOrderBreakdown(o) : ''}
+      ${Object.keys(o.totals || {}).length > 0 || (o.running && o.activeBucketKey) ? renderOrderBreakdown(o) : ''}
       <div class="add-row" style="margin-top:8px;">
         <button class="remove-order-btn" data-action="edit-order" data-id="${o.id}">受注番号を編集</button>
         <button class="remove-order-btn" data-action="remove-order" data-id="${o.id}">この受注番号を削除</button>
@@ -872,6 +878,31 @@ function fmtDateShort(dstr) {
   return `${d.getMonth()+1}/${d.getDate()}`;
 }
 const OVERTIME_LABEL = '残業';
+const AUTO_START_GRACE_MIN = 60;
+function processLabel(code, name) { return code ? `${code}/${name}` : name; }
+function splitProcessLabel(label) {
+  const m = /^(\d{3})\/(.*)$/.exec(label || '');
+  return m ? { code: m[1], name: m[2] } : { code: '', name: label || '' };
+}
+// keep running cards and the auto-start preset pointing at a renamed process
+function renameProcessEverywhere(oldL, newL) {
+  const mapKey = k => k === oldL ? newL : (k === oldL + OVERTIME_SUFFIX ? newL + OVERTIME_SUFFIX : k);
+  state.data.activeOrders.forEach(o => {
+    if (o.currentProcess === oldL) o.currentProcess = newL;
+    const nt = {};
+    Object.entries(o.totals || {}).forEach(([k, v]) => { const nk = mapKey(k); nt[nk] = (nt[nk] || 0) + v; });
+    o.totals = nt;
+    if (o.activeBucketKey) o.activeBucketKey = mapKey(o.activeBucketKey);
+  });
+  if (state.data.autoStart && state.data.autoStart.process === oldL) state.data.autoStart.process = newL;
+}
+function readProcessInputs(codeId, nameId) {
+  const code = document.getElementById(codeId).value.replace(/\D/g, '');
+  const name = document.getElementById(nameId).value.trim();
+  if (!name) { showToast('工程名を入力してください'); return null; }
+  if (code && code.length !== 3) { showToast('工程番号は3桁で入力してください'); return null; }
+  return processLabel(code, name);
+}
 const OVERTIME_SUFFIX = `（${OVERTIME_LABEL}）`;
 function isOvertimeKey(key) { return key.endsWith(OVERTIME_SUFFIX); }
 function dayLabelFromKey(key) { return isOvertimeKey(key) ? key.slice(0, -OVERTIME_SUFFIX.length) : key; }
@@ -984,7 +1015,8 @@ function renderProcessMasterTab() {
       <h2>工程一覧</h2>
       ${state.data.processes.map((p, idx) => renderProcessRow(p, idx)).join('') || '<div class="empty">登録なし</div>'}
       <div class="add-row" style="margin-top:10px;">
-        <input type="text" id="new-process-name" placeholder="新しい工程名">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" id="new-process-code" placeholder="番号" style="flex:0 0 72px;">
+        <input type="text" id="new-process-name" placeholder="工程名">
         <button class="btn" id="add-process" data-action="add-process-btn" style="flex:0 0 auto;">追加</button>
       </div>
     </div>
@@ -1008,6 +1040,36 @@ function renderProcessMasterTab() {
         <input type="time" id="dayshift-end-input" value="${escapeHtml(state.data.dayShiftEnd)}">
         <button class="btn" data-action="save-dayshift-times" style="flex:0 0 auto;">保存</button>
       </div>
+    </div>
+    ${renderAutoSettingsPanel()}
+  `;
+}
+function renderAutoSettingsPanel() {
+  const a = state.data.autoStart;
+  return `
+    <div class="panel">
+      <h2>始業・終業の自動設定</h2>
+      <div class="stat" style="display:block; margin-bottom:8px;">始業時刻になると、セットした受注番号・工程で自動的にカウントを始めます（始業から${AUTO_START_GRACE_MIN}分以内にアプリを開けば、始業時刻にさかのぼって開始）。終業時刻になると、動いているカウンターを止めます（アプリを閉じていても、次に開いた時に終業時刻で締めます）。空欄にした機能はオフになります。</div>
+      <div class="field">
+        <label>始業時刻</label>
+        <input type="time" id="auto-start-time" value="${escapeHtml(a.time)}">
+      </div>
+      <div class="field">
+        <label>始業時の受注番号</label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" spellcheck="false" id="auto-start-order" placeholder="00-00000-000-00-000" value="${escapeHtml(a.orderNumber)}">
+      </div>
+      <div class="field">
+        <label>始業時の工程</label>
+        <select id="auto-start-process">
+          <option value="">選択してください</option>
+          ${state.data.processes.map(p => `<option value="${escapeHtml(p)}" ${a.process === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field">
+        <label>終業時刻</label>
+        <input type="time" id="auto-stop-time" value="${escapeHtml(state.data.autoStopTime)}">
+      </div>
+      <button class="btn-primary" data-action="save-auto-settings">保存</button>
     </div>
   `;
 }
@@ -1033,9 +1095,11 @@ function renderBreakRow(b, idx) {
 }
 function renderProcessRow(p, idx) {
   if (state.editingProcessIdx === idx) {
+    const parts = splitProcessLabel(p);
     return `
       <div class="master-item">
-        <input type="text" id="edit-process-input" value="${escapeHtml(state.editProcessName)}" style="flex:1;">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" maxlength="3" autocomplete="off" id="edit-process-code" value="${escapeHtml(parts.code)}" placeholder="番号" style="flex:0 0 72px;">
+        <input type="text" id="edit-process-input" value="${escapeHtml(parts.name)}" style="flex:1;">
         <button class="btn" data-action="save-process-name" data-idx="${idx}" style="flex:0 0 auto;">保存</button>
         <button class="btn-danger" data-action="cancel-edit-process" style="flex:0 0 auto;">取消</button>
       </div>
@@ -1324,14 +1388,23 @@ function bindDelegatedHandlers() {
           flushOrder(order);
           order.running = false;
           order.lastResumeAt = null;
+          order.breakOverride = false;
         } else {
-          state.data.activeOrders.forEach(o => { if (o.running && o.id !== order.id) { flushOrder(o); o.running = false; o.lastResumeAt = null; } });
+          state.data.activeOrders.forEach(o => {
+            if (o.id === order.id) return;
+            if (o.running) { flushOrder(o); o.running = false; o.lastResumeAt = null; }
+            // only one card counts at a time: drop other cards' pending auto-resume
+            o.onBreak = false;
+            o.breakOverride = false;
+          });
           order.running = true;
           order.lastResumeAt = Date.now();
           order.activeBucketKey = effectiveBucketKey(order);
-          // if manually starting during a break window, mark onBreak=true so the
-          // auto-pause tick doesn't immediately re-pause this manual override
-          order.onBreak = !!getCurrentBreak();
+          order.onBreak = false;
+          // started manually during a break: keep it running (don't auto-pause it)
+          order.breakOverride = !!getCurrentBreak();
+          // the card being counted always sits at the top
+          state.data.activeOrders = [order, ...state.data.activeOrders.filter(o => o.id !== order.id)];
         }
         await saveData();
         render();
@@ -1444,9 +1517,9 @@ function bindDelegatedHandlers() {
         break;
       }
       case 'add-process-btn': {
-        const inp = document.getElementById('new-process-name');
-        const name = inp.value.trim();
+        const name = readProcessInputs('new-process-code', 'new-process-name');
         if (!name) return;
+        if (state.data.processes.includes(name)) { showToast('同じ工程がすでにあります'); return; }
         state.data.processes.push(name);
         await saveData();
         render();
@@ -1468,11 +1541,28 @@ function bindDelegatedHandlers() {
         break;
       }
       case 'cancel-edit-process': state.editingProcessIdx = null; render(); break;
+      case 'save-auto-settings': {
+        const time = document.getElementById('auto-start-time').value;
+        const orderDigits = document.getElementById('auto-start-order').value.replace(/\D/g, '');
+        const process = document.getElementById('auto-start-process').value;
+        const stopTime = document.getElementById('auto-stop-time').value;
+        if (orderDigits && orderDigits.length !== 15) { showToast('受注番号は15桁で入力してください'); return; }
+        if ((orderDigits && !process) || (!orderDigits && process)) { showToast('受注番号と工程は両方セットしてください'); return; }
+        state.data.autoStart = { time, orderNumber: orderDigits ? formatOrderNumber(orderDigits) : '', process };
+        state.data.autoStopTime = stopTime;
+        await saveData();
+        showToast('保存しました');
+        render();
+        break;
+      }
       case 'save-process-name': {
-        const name = state.editProcessName.trim();
+        const name = readProcessInputs('edit-process-code', 'edit-process-input');
         if (!name) return;
         const idx = parseInt(t.dataset.idx);
+        if (state.data.processes.some((p, i) => p === name && i !== idx)) { showToast('同じ工程がすでにあります'); return; }
+        const oldName = state.data.processes[idx];
         state.data.processes[idx] = name;
+        if (oldName !== name) renameProcessEverywhere(oldName, name);
         state.editingProcessIdx = null;
         await saveData();
         render();
@@ -1493,6 +1583,12 @@ function bindDelegatedHandlers() {
       render();
       const newEl = document.getElementById('end-reading-input');
       if (newEl) { newEl.focus(); newEl.setSelectionRange(newEl.value.length, newEl.value.length); }
+    } else if (el.id === 'auto-start-order') {
+      const formatted = formatOrderNumber(el.value.replace(/\D/g, '').slice(0, 15));
+      el.value = formatted;
+      requestAnimationFrame(() => el.setSelectionRange(formatted.length, formatted.length));
+    } else if (el.id === 'new-process-code' || el.id === 'edit-process-code') {
+      el.value = el.value.replace(/\D/g, '').slice(0, 3);
     } else if (el.id === 'edit-start-reading-input') {
       state.editStartDigits = el.value.replace(/\D/g, '').slice(0, 9);
       const formatted = digitsToDisplay(state.editStartDigits);
@@ -1564,6 +1660,8 @@ function bindDelegatedHandlers() {
         ];
         if (!state.data.dayShiftStart) state.data.dayShiftStart = '08:30';
   if (!state.data.dayShiftEnd) state.data.dayShiftEnd = '17:30';
+  if (!state.data.autoStart) state.data.autoStart = { time: '08:30', orderNumber: '', process: '' };
+  if (state.data.autoStopTime === undefined) state.data.autoStopTime = '';
         await saveData();
         showToast('復元しました');
         render();
@@ -1576,12 +1674,48 @@ function bindDelegatedHandlers() {
 }
 
 // accumulate a running order's elapsed time into its totals (called before pausing/switching)
-function flushOrder(order) {
-  if (order.running && order.lastResumeAt && order.activeBucketKey) {
-    const elapsed = (Date.now() - order.lastResumeAt) / 1000;
-    const key = order.activeBucketKey;
-    order.totals[key] = (order.totals[key] || 0) + elapsed;
+// Time since lastResumeAt, split by time slot. This keeps the numbers right even when
+// the app was suspended (screen locked / closed) across a break or the 日勤/残業 boundary.
+function minutesOfDayAt(ms) { const x = new Date(ms); return x.getHours() * 60 + x.getMinutes() + x.getSeconds() / 60; }
+function isBreakAtMs(ms) {
+  const m = minutesOfDayAt(ms);
+  return (state.data.breaks || []).some(b => m >= timeStrToMinutes(b.start) && m < timeStrToMinutes(b.end));
+}
+function isDayShiftAtMs(ms) {
+  const m = minutesOfDayAt(ms);
+  return m >= timeStrToMinutes(state.data.dayShiftStart || '08:30') && m < timeStrToMinutes(state.data.dayShiftEnd || '17:30');
+}
+function pendingBuckets(order, untilMs) {
+  const out = {};
+  if (!order.running || !order.lastResumeAt || !order.currentProcess || untilMs <= order.lastResumeAt) return out;
+  const from = order.lastResumeAt, to = untilMs;
+  const marks = [state.data.dayShiftStart, state.data.dayShiftEnd, ...(state.data.breaks || []).flatMap(b => [b.start, b.end])].filter(Boolean);
+  const cuts = [from, to];
+  const day = new Date(from); day.setHours(0, 0, 0, 0);
+  for (let i = 0; i < 400 && day.getTime() < to; i++) {
+    marks.forEach(t => { const ms = msAtTimeOnDate(day, t); if (ms > from && ms < to) cuts.push(ms); });
+    day.setDate(day.getDate() + 1);
   }
+  cuts.sort((a, b) => a - b);
+  for (let i = 0; i < cuts.length - 1; i++) {
+    const a = cuts[i], b = cuts[i + 1];
+    if (b <= a) continue;
+    const mid = (a + b) / 2;
+    if (!order.breakOverride && isBreakAtMs(mid)) continue;
+    const key = isDayShiftAtMs(mid) ? order.currentProcess : order.currentProcess + OVERTIME_SUFFIX;
+    out[key] = (out[key] || 0) + (b - a) / 1000;
+  }
+  return out;
+}
+function pendingSeconds(order) {
+  return Object.values(pendingBuckets(order, Date.now())).reduce((s, v) => s + v, 0);
+}
+function orderLiveTotalSeconds(o) { return orderTotalSeconds(o) + pendingSeconds(o); }
+function flushOrderUntil(order, untilMs) {
+  Object.entries(pendingBuckets(order, untilMs)).forEach(([k, v]) => { order.totals[k] = (order.totals[k] || 0) + v; });
+}
+function flushOrder(order) {
+  flushOrderUntil(order, Date.now());
   order.lastResumeAt = Date.now();
 }
 
@@ -1609,19 +1743,18 @@ async function checkBreaksAndAutoSwitch() {
 
   state.data.activeOrders.forEach(o => {
     if (onBreakNow) {
-      if (o.running && !o.onBreak) {
+      // auto-pause running cards, except one the user deliberately started during this break
+      if (o.running && !o.onBreak && !o.breakOverride) {
         flushOrder(o);
-        o.preBreakProcess = o.currentProcess;
         o.running = false;
         o.lastResumeAt = null;
         o.onBreak = true;
         changed = true;
       }
     } else {
+      if (o.breakOverride) { flushOrder(o); o.breakOverride = false; changed = true; }
       if (o.onBreak) {
         o.onBreak = false;
-        o.currentProcess = o.preBreakProcess || o.currentProcess;
-        o.preBreakProcess = null;
         o.running = true;
         o.lastResumeAt = Date.now();
         o.activeBucketKey = effectiveBucketKey(o);
@@ -1662,22 +1795,102 @@ async function checkShiftBoundaryAutoSplit() {
   }
 }
 
+// ---------- 始業の自動開始・終業の自動停止 ----------
+function msAtTimeOnDate(dateObj, hhmm) {
+  const [h, m] = hhmm.split(':').map(Number);
+  const d = new Date(dateObj.getTime());
+  d.setHours(h, m, 0, 0);
+  return d.getTime();
+}
+async function checkAutoStop() {
+  const t = state.data && state.data.autoStopTime;
+  if (!t || !state.data.activeOrders.length) return;
+  const today = todayStr();
+  const nowD = new Date();
+  let stopped = 0;
+
+  // a card left running from a previous day: close it at that day's 終業 time
+  state.data.activeOrders.forEach(o => {
+    if (!o.running || !o.lastResumeAt) return;
+    const started = new Date(o.lastResumeAt);
+    if (started.toDateString() === nowD.toDateString()) return;
+    let endMs = msAtTimeOnDate(started, t);
+    if (endMs <= o.lastResumeAt) endMs = msAtTimeOnDate(started, '23:59') + 60000;
+    flushOrderUntil(o, endMs);
+    o.running = false; o.lastResumeAt = null; o.onBreak = false; o.breakOverride = false;
+    stopped++;
+  });
+
+  if (state.data.autoStopDoneDate !== today && nowMinutesOfDay() >= timeStrToMinutes(t)) {
+    const endMs = msAtTimeOnDate(nowD, t);
+    state.data.activeOrders.forEach(o => {
+      // cards started manually after 終業 keep running
+      if (o.running && o.lastResumeAt && o.lastResumeAt < endMs) {
+        flushOrderUntil(o, endMs);
+        o.running = false; o.lastResumeAt = null;
+        stopped++;
+      }
+      o.onBreak = false; o.breakOverride = false;
+    });
+    state.data.autoStopDoneDate = today;
+    await saveData();
+    if (stopped) showToast(`終業時刻（${t}）でカウンターを止めました`);
+    render();
+    return;
+  }
+  if (stopped) { await saveData(); showToast('前日から動いたままのカウンターを終業時刻で止めました'); render(); }
+}
+async function checkAutoStart() {
+  const a = state.data && state.data.autoStart;
+  if (!a || !a.time || orderNumberDigitCount(a.orderNumber) !== 15 || !a.process) return;
+  const today = todayStr();
+  if (state.data.autoStartDoneDate === today) return;
+  const now = nowMinutesOfDay(), s = timeStrToMinutes(a.time);
+  if (now < s) return;
+  state.data.autoStartDoneDate = today; // once per day
+  if (now >= s + AUTO_START_GRACE_MIN || state.data.activeOrders.some(o => o.running)) { await saveData(); return; }
+
+  let order = state.data.activeOrders.find(o => o.orderNumber === a.orderNumber);
+  if (!order) {
+    order = { id: uid(), orderNumber: a.orderNumber, currentProcess: null, running: false, lastResumeAt: null,
+              totals: {}, onBreak: false, preBreakProcess: null, activeBucketKey: null };
+    state.data.activeOrders.push(order);
+  }
+  state.data.activeOrders.forEach(o => { if (o.id !== order.id) { o.onBreak = false; o.breakOverride = false; } });
+  order.currentProcess = a.process;
+  order.running = true;
+  order.lastResumeAt = msAtTimeOnDate(new Date(), a.time); // さかのぼって始業時刻から
+  order.onBreak = false;
+  order.breakOverride = false;
+  order.activeBucketKey = effectiveBucketKey(order);
+  state.data.activeOrders = [order, ...state.data.activeOrders.filter(o => o.id !== order.id)];
+  await saveData();
+  showToast(`始業：${a.orderNumber} ${a.process} で開始しました`);
+  render();
+}
+
 // lightweight per-second refresh of visible timers without a full re-render
 setInterval(async () => {
+  await checkAutoStop();
+  await checkAutoStart();
   await checkBreaksAndAutoSwitch();
   await checkShiftBoundaryAutoSplit();
   if (state.mode !== 'process' || state.tabByMode.process !== 'record') return;
   const anyRunning = state.data && state.data.activeOrders.some(o => o.running);
   if (!anyRunning) return;
+  let needRender = false;
   state.data.activeOrders.forEach(o => {
     const totalEl = document.querySelector(`[data-timer-total="${o.id}"]`);
-    if (totalEl) totalEl.innerHTML = fmtDualTime(orderTotalSeconds(o) + (o.running ? (Date.now() - o.lastResumeAt) / 1000 : 0));
+    if (totalEl) totalEl.innerHTML = fmtDualTime(orderLiveTotalSeconds(o));
     if (o.running && o.currentProcess) {
-      const key = o.activeBucketKey;
-      const procEl = document.querySelector(`[data-timer-proc="${o.id}:${key}"]`);
-      if (procEl) procEl.innerHTML = fmtDualTime(orderCurrentDisplaySeconds(o, key));
+      Object.keys(pendingBuckets(o, Date.now())).forEach(key => {
+        const procEl = document.querySelector(`[data-timer-proc="${o.id}:${key}"]`);
+        if (procEl) procEl.innerHTML = fmtDualTime(orderCurrentDisplaySeconds(o, key));
+        else needRender = true;
+      });
     }
   });
+  if (needRender) render();
 }, 1000);
 
 async function handleSaveBase() {
