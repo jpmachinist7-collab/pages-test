@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.23</title>
+<title>稼働ログ v1.24</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -438,7 +438,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.23</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.24</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -1404,8 +1404,6 @@ function bindDelegatedHandlers() {
           order.onBreak = false;
           // started manually during a break: keep it running (don't auto-pause it)
           order.breakOverride = !!getCurrentBreak();
-          // the card being counted always sits at the top
-          state.data.activeOrders = [order, ...state.data.activeOrders.filter(o => o.id !== order.id)];
         }
         await saveData();
         render();
@@ -1873,7 +1871,6 @@ async function checkAutoStart() {
   order.onBreak = false;
   order.breakOverride = false;
   order.activeBucketKey = effectiveBucketKey(order);
-  state.data.activeOrders = [order, ...state.data.activeOrders.filter(o => o.id !== order.id)];
   await saveData();
   showToast(`始業：${a.orderNumber} ${a.process} で開始しました`);
   render();
