@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>稼働ログ v1.25</title>
+<title>稼働ログ v1.26</title>
 <style>
   :root {
     --bg: #070d1f;
@@ -294,7 +294,7 @@ const storage = {
 const DATA_KEY = 'machine-log-data-v3';
 
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function todayStr() { const d = new Date(); return d.toISOString().slice(0, 10); }
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function fmtDateJp(dstr) {
   const d = new Date(dstr + 'T00:00:00');
   const w = ['日','月','火','水','木','金','土'][d.getDay()];
@@ -443,7 +443,7 @@ async function shareOrDownload(content, filename, mimeType) {
 function render() {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.25</span></h1>
+    <h1>稼働ログ <span style="font-size:0.62em; color:var(--muted); font-weight:400;">v1.26</span></h1>
     <div class="today-line">今日の日付：${fmtDateJp(todayStr())}</div>
     ${state.mode === 'machine' ? renderMachineMode() : renderProcessMode()}
     <div class="tabbar">
@@ -1873,7 +1873,26 @@ async function checkAutoStart() {
   const now = nowMinutesOfDay(), s = timeStrToMinutes(a.time);
   if (now < s) return;
   state.data.autoStartDoneDate = today; // once per day
-  if (now >= s + AUTO_START_GRACE_MIN || state.data.activeOrders.some(o => o.running)) { await saveData(); return; }
+  const late = now >= s + AUTO_START_GRACE_MIN;
+  const someRunning = state.data.activeOrders.some(o => o.running);
+  if (late || someRunning) {
+    // too late to back-fill: during working hours, still set the preset process so one tap on ▶ starts it
+    if (late && !someRunning && now < timeStrToMinutes(state.data.dayShiftEnd || '17:30')) {
+      let card = state.data.activeOrders.find(o => o.orderNumber === a.orderNumber);
+      if (!card) {
+        card = { id: uid(), orderNumber: a.orderNumber, currentProcess: null, running: false, lastResumeAt: null,
+                 totals: {}, onBreak: false, preBreakProcess: null, activeBucketKey: null };
+        state.data.activeOrders.push(card);
+      }
+      if (!card.currentProcess) card.currentProcess = a.process;
+      await saveData();
+      showToast('始業時刻を過ぎていたので工程だけセットしました。▶で開始してください');
+      render();
+      return;
+    }
+    await saveData();
+    return;
+  }
 
   let order = state.data.activeOrders.find(o => o.orderNumber === a.orderNumber);
   if (!order) {
@@ -1941,7 +1960,7 @@ async function handleSaveCycle() {
   const elapsed = roundQuarter(rawElapsedHours);
   const log = {
     id: uid(),
-    date: todayStr(),
+    date: machine.lastDate || todayStr(),
     machineId: machine.id,
     startMinutes: machine.lastReadingMinutes,
     endMinutes: endMinutes,
